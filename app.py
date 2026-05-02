@@ -1,4 +1,5 @@
-from flask import Flask, request, jsonify
+import json
+from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 import yfinance as yf
 import numpy as np
@@ -8,8 +9,26 @@ from datetime import datetime, timedelta
 import traceback
 from textblob import TextBlob
 
+from models import db, User, Portfolio, Transaction, Watchlist, AccountHistory
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+
 app = Flask(__name__)
-CORS(app)
+app.config['SECRET_KEY'] = 'cyberpunk-super-secret-key-2026'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///cyberpunk.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+CORS(app, supports_credentials=True)
+db.init_app(app)
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+with app.app_context():
+    db.create_all()
 
 TRADING_DAYS = 252
 RISK_FREE_RATE = 0.02
@@ -17,11 +36,309 @@ BENCHMARK = '^GSPC'
 SIZE_PROXY = '^RUT'
 VALUE_PROXY = 'VTV'
 
+# --- Auth & State Endpoints ---
+
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+    if User.query.filter_by(username=username).first():
+        return jsonify({'error': 'Username already exists'}), 400
+    
+    user = User(username=username)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    login_user(user)
+    return jsonify({'message': 'Registered successfully', 'username': username})
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    user = User.query.filter_by(username=username).first()
+    if user and user.check_password(password):
+        login_user(user)
+        return jsonify({'message': 'Logged in successfully', 'username': username})
+    return jsonify({'error': 'Invalid username or password'}), 401
+
+@app.route('/logout', methods=['POST'])
+@login_required
+def logout():
+    logout_user()
+    return jsonify({'message': 'Logged out successfully'})
+
+@app.route('/user_info', methods=['GET'])
+def user_info():
+    if current_user.is_authenticated:
+        ports = Portfolio.query.filter_by(user_id=current_user.id).all()
+        total_val = sum(p.total_value for p in ports)
+        
+        # Take snapshot
+        today = datetime.utcnow().date()
+        history = AccountHistory.query.filter_by(user_id=current_user.id, date=today).first()
+        if history:
+            history.total_value = total_val
+        else:
+            new_history = AccountHistory(user_id=current_user.id, date=today, total_value=total_val)
+            db.session.add(new_history)
+        db.session.commit()
+        
+        return jsonify({
+            'logged_in': True, 
+            'username': current_user.username, 
+            'total_account_value': total_val,
+            'tier': current_user.tier,
+            'theme_color': current_user.theme_color
+        })
+    return jsonify({'logged_in': False})
+
+@app.route('/save_portfolio', methods=['POST'])
+@login_required
+def save_portfolio():
+    data = request.json
+    name = data.get('portfolio_name')
+    if not name:
+        return jsonify({'error': 'Portfolio name required'}), 400
+    
+    config_json = json.dumps({
+        'tickers': data.get('tickers', []),
+        'weights': data.get('weights', []),
+        'timeframe': data.get('timeframe', '1y')
+    })
+    
+    portfolio = Portfolio(
+        user_id=current_user.id,
+        portfolio_name=name,
+        total_value=float(data.get('total_value', 100000)),
+        configuration=config_json
+    )
+    db.session.add(portfolio)
+    db.session.commit()
+    return jsonify({'message': 'Portfolio saved successfully', 'id': portfolio.id})
+
+@app.route('/load_portfolios', methods=['GET'])
+@login_required
+def load_portfolios():
+    ports = Portfolio.query.filter_by(user_id=current_user.id).all()
+    res = []
+    for p in ports:
+        res.append({
+            'id': p.id,
+            'name': p.portfolio_name,
+            'total_value': p.total_value,
+            'config': json.loads(p.configuration)
+        })
+    return jsonify({'portfolios': res})
+
+
+@app.route('/portfolio/<int:portfolio_id>/state', methods=['GET'])
+@login_required
+def get_portfolio_state(portfolio_id):
+    p = Portfolio.query.get_or_404(portfolio_id)
+    if p.user_id != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    transactions = Transaction.query.filter_by(portfolio_id=p.id).order_by(Transaction.date.asc()).all()
+    holdings = {}
+    cost_basis = 0.0
+    
+    tx_list = []
+    for t in transactions:
+        tx_list.insert(0, {
+            'id': t.id, 'ticker': t.ticker, 'type': t.transaction_type,
+            'quantity': t.quantity, 'price': t.price, 'date': t.date.strftime('%Y-%m-%d %H:%M')
+        })
+        
+    for t in transactions:
+        if t.ticker not in holdings:
+            holdings[t.ticker] = {'qty': 0, 'cost': 0}
+            
+        if t.transaction_type == 'BUY':
+            holdings[t.ticker]['qty'] += t.quantity
+            holdings[t.ticker]['cost'] += (t.quantity * t.price)
+            cost_basis += (t.quantity * t.price)
+        else:
+            if holdings[t.ticker]['qty'] > 0:
+                avg_cost = holdings[t.ticker]['cost'] / holdings[t.ticker]['qty']
+                holdings[t.ticker]['qty'] -= t.quantity
+                holdings[t.ticker]['cost'] -= (t.quantity * avg_cost)
+                cost_basis -= (t.quantity * avg_cost)
+                
+    holdings = {k: v for k, v in holdings.items() if v['qty'] > 0}
+    tickers = list(holdings.keys())
+    current_value = 0.0
+    prices = {}
+    
+    if tickers:
+        data = yf.download(tickers, period='5d')
+        if not data.empty:
+            col = 'Adj Close' if 'Adj Close' in data else 'Close'
+            if isinstance(data.columns, pd.MultiIndex):
+                df = data[col]
+            else:
+                df = data.to_frame() if isinstance(data, pd.Series) else data[col]
+                
+            for t in tickers:
+                if t in df.columns or (isinstance(df, pd.Series) and t == tickers[0]):
+                    series = df[t].dropna() if isinstance(df, pd.DataFrame) else df.dropna()
+                    if not series.empty:
+                        prices[t] = float(series.iloc[-1])
+                            
+    for t, h in holdings.items():
+        current_value += h['qty'] * prices.get(t, 0)
+        
+    weights = []
+    if current_value > 0:
+        weights = [(holdings[t]['qty'] * prices.get(t, 0)) / current_value for t in tickers]
+        
+    unrealized_pnl = current_value - cost_basis
+    
+    # Update portfolio total value in db based on current market value
+    if current_value > 0:
+        p.total_value = current_value
+        db.session.commit()
+    
+    return jsonify({
+        'tickers': tickers,
+        'weights': weights,
+        'current_value': current_value,
+        'cost_basis': cost_basis,
+        'unrealized_pnl': unrealized_pnl,
+        'transactions': tx_list
+    })
+
+@app.route('/portfolio/<int:portfolio_id>/trade', methods=['POST'])
+@login_required
+def execute_trade(portfolio_id):
+    p = Portfolio.query.get_or_404(portfolio_id)
+    if p.user_id != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.json
+    ticker = data.get('ticker', '').upper()
+    ttype = data.get('type', 'BUY').upper()
+    qty = float(data.get('quantity', 0))
+    
+    if qty <= 0 or not ticker:
+        return jsonify({'error': 'Invalid trade parameters'}), 400
+        
+    
+    # Enforce standard limits
+    if current_user.tier == 'Standard':
+        existing_txs = Transaction.query.filter_by(portfolio_id=p.id).all()
+        unique_tickers = set(t.ticker for t in existing_txs)
+        if ticker not in unique_tickers and len(unique_tickers) >= 3:
+            return jsonify({'error': 'UPGRADE_REQUIRED', 'message': 'Standard tier limits portfolios to 3 assets. Upgrade to Pro for unlimited.'}), 403
+
+    yf_data = yf.download(ticker, period='5d')
+    if yf_data.empty:
+        return jsonify({'error': 'Ticker not found'}), 404
+        
+    col = 'Adj Close' if 'Adj Close' in yf_data else 'Close'
+    df = yf_data[col]
+    series = df[ticker].dropna() if isinstance(df, pd.DataFrame) else df.dropna()
+    if series.empty:
+        return jsonify({'error': 'Ticker price not available'}), 404
+        
+    price = float(series.iloc[-1])
+    
+    t = Transaction(portfolio_id=p.id, ticker=ticker, transaction_type=ttype, quantity=qty, price=price)
+    db.session.add(t)
+    db.session.commit()
+    
+    return jsonify({'message': 'Trade executed', 'price': price})
+
+@app.route('/watchlist', methods=['GET', 'POST', 'DELETE'])
+@login_required
+def watchlist_api():
+    if request.method == 'GET':
+        items = Watchlist.query.filter_by(user_id=current_user.id).all()
+        tickers = [i.ticker for i in items]
+        alerts = []
+        if tickers:
+            data = yf.download(tickers, period='5d')
+            if not data.empty:
+                col = 'Adj Close' if 'Adj Close' in data else 'Close'
+                df = data[col] if isinstance(data.columns, pd.MultiIndex) else (data.to_frame() if isinstance(data, pd.Series) else data[col])
+                for t in tickers:
+                    if t in df.columns or (isinstance(df, pd.Series) and t == tickers[0]):
+                        series = df[t].dropna() if isinstance(df, pd.DataFrame) else df.dropna()
+                        if len(series) >= 2:
+                            cur = float(series.iloc[-1])
+                            prev = float(series.iloc[-2])
+                            pct = (cur - prev) / prev
+                            alerts.append({'ticker': t, 'price': cur, 'change': pct})
+        return jsonify({'watchlist': alerts})
+        
+    elif request.method == 'POST':
+        ticker = request.json.get('ticker', '').upper()
+
+        if not ticker:
+            return jsonify({'error': 'Ticker required'}), 400
+            
+        if current_user.tier == 'Standard':
+            wl_count = Watchlist.query.filter_by(user_id=current_user.id).count()
+            if not Watchlist.query.filter_by(user_id=current_user.id, ticker=ticker).first() and wl_count >= 2:
+                return jsonify({'error': 'UPGRADE_REQUIRED', 'message': 'Standard tier limits Watchlist to 2 assets. Upgrade to Pro for unlimited.'}), 403
+                
+        if not Watchlist.query.filter_by(user_id=current_user.id, ticker=ticker).first():
+            w = Watchlist(user_id=current_user.id, ticker=ticker)
+            db.session.add(w)
+            db.session.commit()
+        return jsonify({'message': 'Added to watchlist'})
+        
+    elif request.method == 'DELETE':
+        ticker = request.json.get('ticker', '').upper()
+        w = Watchlist.query.filter_by(user_id=current_user.id, ticker=ticker).first()
+        if w:
+            db.session.delete(w)
+            db.session.commit()
+        return jsonify({'message': 'Removed from watchlist'})
+
+
+@app.route('/settings', methods=['POST'])
+@login_required
+def update_settings():
+    color = request.json.get('theme_color')
+    if color in ['cyan', 'green', 'purple']:
+        current_user.theme_color = color
+        db.session.commit()
+        return jsonify({'message': 'Theme updated'})
+    return jsonify({'error': 'Invalid theme'}), 400
+
+@app.route('/leaderboard', methods=['GET'])
+@login_required
+def leaderboard():
+    users = User.query.all()
+    board = []
+    for u in users:
+        ports = Portfolio.query.filter_by(user_id=u.id).all()
+        if not ports: continue
+        total_val = sum(p.total_value for p in ports)
+        # Assuming initial capital of 100k per portfolio created
+        start_val = len(ports) * 100000.0
+        ret = (total_val - start_val) / start_val if start_val > 0 else 0
+        board.append({'username': u.username, 'return': ret * 100})
+    board.sort(key=lambda x: x['return'], reverse=True)
+    return jsonify({'leaderboard': board[:10]})
+
+@app.route('/account_history', methods=['GET'])
+@login_required
+def account_history():
+    history = AccountHistory.query.filter_by(user_id=current_user.id).order_by(AccountHistory.date.asc()).all()
+    dates = [h.date.strftime('%Y-%m-%d') for h in history]
+    values = [h.total_value for h in history]
+    return jsonify({'dates': dates, 'values': values})
+
+# --- Quant Data Endpoints ---
+
+
 def fetch_data(tickers, timeframe):
-    """
-    Fetch historical daily 'Adj Close' prices for the list of tickers and the benchmark.
-    Handles timeframe calculations and NaN values robustly.
-    """
     end_date = datetime.today()
     if timeframe == '1y':
         days = 365
@@ -35,10 +352,8 @@ def fetch_data(tickers, timeframe):
     
     all_tickers = tickers + [BENCHMARK, SIZE_PROXY, VALUE_PROXY]
     
-    # Download data
     data = yf.download(all_tickers, start=start_date, end=end_date)
     
-    # Extract prices robustly
     if isinstance(data.columns, pd.MultiIndex):
         prices = pd.DataFrame()
         for ticker in all_tickers:
@@ -54,29 +369,42 @@ def fetch_data(tickers, timeframe):
             data = data['Close']
             
         if isinstance(data, pd.Series):
-            # Fallback if only one ticker is somehow fetched
             data = data.to_frame()
             data.columns = all_tickers
         
-    # Forward fill then backward fill for NaN values
     data = data.ffill().bfill()
-    # Drop columns that are entirely NaN
     data = data.dropna(axis=1, how='all')
     
     latest_prices = data.iloc[-1].to_dict() if not data.empty else {}
     
-    # Calculate daily percentage returns
+    telemetry = {}
+    for ticker in tickers:
+        if ticker in data.columns:
+            p_series = data[ticker].dropna()
+            if not p_series.empty:
+                cur = float(p_series.iloc[-1])
+                prev = float(p_series.iloc[-2]) if len(p_series) > 1 else cur
+                change = (cur - prev) / prev if prev else 0.0
+                spark = p_series.iloc[-30:].tolist()
+                full_history = p_series.tolist()
+                full_dates = [d.strftime('%Y-%m-%d') for d in p_series.index]
+                telemetry[ticker] = {
+                    'current_price': cur,
+                    'daily_change': change,
+                    'sparkline': spark,
+                    'history': full_history,
+                    'dates': full_dates
+                }
+
     returns = data.pct_change().dropna()
     
-    # Identify unresolvable tickers
     missing_tickers = [t for t in tickers if t not in returns.columns]
     if missing_tickers:
         raise ValueError(f"Failed to fetch data for: {', '.join(missing_tickers)}")
         
-    return returns, latest_prices
+    return returns, latest_prices, telemetry
 
 def calculate_portfolio_performance(weights, returns):
-    """Calculate annualized expected return, annualized volatility, and Sharpe Ratio."""
     mean_returns = returns.mean()
     cov_matrix = returns.cov()
     
@@ -86,11 +414,9 @@ def calculate_portfolio_performance(weights, returns):
     return port_return, port_volatility, sharpe_ratio
 
 def calculate_sortino(weights, returns):
-    """Calculate the Sortino Ratio (penalizes only downside volatility)."""
     port_returns_daily = returns.dot(weights)
     mean_return = np.mean(port_returns_daily) * TRADING_DAYS
     
-    # Isolate negative returns
     downside_returns = port_returns_daily[port_returns_daily < 0]
     if len(downside_returns) > 0:
         downside_std = np.sqrt(np.mean(downside_returns**2)) * np.sqrt(TRADING_DAYS)
@@ -100,7 +426,6 @@ def calculate_sortino(weights, returns):
     return sortino
 
 def calculate_max_drawdown(weights, returns):
-    """Calculate Maximum Drawdown (largest peak-to-trough drop)."""
     port_returns_daily = returns.dot(weights)
     cumulative = (1 + port_returns_daily).cumprod()
     peak = cumulative.cummax()
@@ -108,26 +433,22 @@ def calculate_max_drawdown(weights, returns):
     return drawdown.min()
 
 def calculate_var(weights, returns, confidence=0.05):
-    """Calculate Value at Risk (VaR) using historical simulation."""
     port_returns_daily = returns.dot(weights)
     var = np.percentile(port_returns_daily, 100 * confidence)
     return var
 
 def calculate_cvar(weights, returns, confidence=0.05):
-    """Calculate Conditional Value at Risk (Expected Shortfall)."""
     port_returns_daily = returns.dot(weights)
     var = np.percentile(port_returns_daily.dropna(), 100 * confidence)
     cvar = port_returns_daily[port_returns_daily <= var].mean()
     return cvar if not np.isnan(cvar) else var
 
 def calculate_beta(weights, returns, benchmark_returns):
-    """Calculate Portfolio Beta relative to the S&P 500 benchmark."""
     if benchmark_returns is None or benchmark_returns.empty:
         return 1.0
     port_returns_daily = returns.dot(weights)
     bench_returns_daily = benchmark_returns.iloc[:, 0]
     
-    # Align the indices just in case
     aligned = pd.concat([port_returns_daily, bench_returns_daily], axis=1).dropna()
     if aligned.empty:
         return 1.0
@@ -137,7 +458,6 @@ def calculate_beta(weights, returns, benchmark_returns):
     return cov / var_bench if var_bench > 0 else 1.0
 
 def generate_kpis(weights, returns, benchmark_returns):
-    """Aggregate all advanced KPIs into a dictionary."""
     ret, vol, sharpe = calculate_portfolio_performance(weights, returns)
     sortino = calculate_sortino(weights, returns)
     max_dd = calculate_max_drawdown(weights, returns)
@@ -157,24 +477,19 @@ def generate_kpis(weights, returns, benchmark_returns):
     }
 
 def generate_deep_dive_data(weights, returns, benchmark_returns):
-    """Generate granular time-series and distributions for the Deep Dive Modals."""
     port_returns_daily = returns.dot(weights)
     
-    # 1. Return Histogram (Distribution)
     hist, bin_edges = np.histogram(port_returns_daily.dropna(), bins=50)
     
-    # 2. Rolling 60-day Sharpe Ratio
     rolling_returns = port_returns_daily.rolling(window=60).mean() * TRADING_DAYS
     rolling_std = port_returns_daily.rolling(window=60).std() * np.sqrt(TRADING_DAYS)
     rolling_std = rolling_std.replace(0, np.nan)
     rolling_sharpe = ((rolling_returns - RISK_FREE_RATE) / rolling_std).dropna()
     
-    # 3. Max Drawdown "Underwater Curve"
     cumulative = (1 + port_returns_daily).cumprod()
     peak = cumulative.cummax()
     underwater = ((cumulative - peak) / peak).dropna()
     
-    # 4. Rolling 60-day Beta and 90-day Correlation
     rolling_beta = pd.Series(dtype=float)
     rolling_correlation = pd.Series(dtype=float)
     if benchmark_returns is not None and not benchmark_returns.empty:
@@ -212,15 +527,12 @@ def generate_deep_dive_data(weights, returns, benchmark_returns):
     }
 
 def negative_sharpe_ratio(weights, returns):
-    """Objective function to minimize for Max Sharpe portfolio."""
     return -calculate_portfolio_performance(weights, returns)[2]
 
 def portfolio_volatility(weights, returns):
-    """Objective function to minimize for Min Volatility portfolio."""
     return calculate_portfolio_performance(weights, returns)[1]
 
 def optimize_portfolio(returns, objective='max_sharpe'):
-    """Compute the mathematically optimal portfolio weights using SLSQP."""
     num_assets = len(returns.columns)
     args = (returns,)
     constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
@@ -236,7 +548,6 @@ def optimize_portfolio(returns, objective='max_sharpe'):
     return result.x
 
 def calculate_factor_exposure(weights, returns, full_returns):
-    """Multiple linear regression to find factor betas."""
     port_returns = returns.dot(weights)
     factors = [BENCHMARK, SIZE_PROXY, VALUE_PROXY]
     available_factors = [f for f in factors if f in full_returns.columns]
@@ -259,12 +570,10 @@ def calculate_factor_exposure(weights, returns, full_returns):
         return {'market': 1.0, 'size': 0.0, 'value': 0.0}
 
 def calculate_rebalance(tickers, current_weights, optimal_weights, latest_prices, total_capital):
-    """Calculate the dollar and share amounts to execute."""
     orders = []
     for i, ticker in enumerate(tickers):
         curr_w = current_weights[i]
         opt_w = optimal_weights[i]
-        # Handle tuple keys from yfinance multi-index if necessary
         price = 1.0
         for k, v in latest_prices.items():
             if ticker in str(k):
@@ -287,7 +596,6 @@ def calculate_rebalance(tickers, current_weights, optimal_weights, latest_prices
     return orders
 
 def get_sentiment_data(tickers):
-    """Fetch recent news and analyze sentiment with TextBlob."""
     news_feed = []
     for ticker in tickers:
         try:
@@ -314,7 +622,6 @@ def get_sentiment_data(tickers):
     return news_feed
 
 def monte_carlo_simulation(returns, num_portfolios=1000):
-    """Generate 1000 random portfolios for the Efficient Frontier scatter plot."""
     num_assets = len(returns.columns)
     results = np.zeros((3, num_portfolios))
     
@@ -330,7 +637,6 @@ def monte_carlo_simulation(returns, num_portfolios=1000):
     return results
 
 def monte_carlo_wealth(weights, returns, initial_investment=10000, years=10, num_simulations=1000):
-    """Generate GBM Monte Carlo future wealth projection paths."""
     port_returns_daily = returns.dot(weights).dropna()
     if port_returns_daily.empty:
         return {}
@@ -360,7 +666,6 @@ def monte_carlo_wealth(weights, returns, initial_investment=10000, years=10, num
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    """Main API Endpoint for Portfolio Risk & Analytics"""
     data = request.json
     tickers = data.get('tickers', [])
     weights = data.get('weights', [])
@@ -373,7 +678,6 @@ def analyze():
     if len(tickers) != len(weights):
         return jsonify({'error': 'The number of tickers and weights must match.'}), 400
         
-    # Standardize tickers and prepare weights array
     tickers = [str(t).strip().upper() for t in tickers]
     weights = np.array(weights, dtype=float)
     
@@ -382,25 +686,20 @@ def analyze():
     weights = weights / np.sum(weights)
     
     try:
-        # 1. Fetch historical data
-        full_returns, latest_prices = fetch_data(tickers, timeframe)
+        full_returns, latest_prices, telemetry = fetch_data(tickers, timeframe)
         returns = full_returns[tickers]
         benchmark_returns = full_returns[[BENCHMARK]] if BENCHMARK in full_returns.columns else None
         
-        # 2. Compute KPIs for User Portfolio
         user_kpis = generate_kpis(weights, returns, benchmark_returns)
         
-        # 3. Compute KPIs for Optimal Portfolios
         opt_weights = optimize_portfolio(returns, 'max_sharpe')
         opt_kpis = generate_kpis(opt_weights, returns, benchmark_returns)
         
-        # 4. Compute KPIs for the S&P 500 Benchmark
         bench_kpis = None
         if benchmark_returns is not None and not benchmark_returns.empty:
             bench_weights = np.array([1.0])
             bench_kpis = generate_kpis(bench_weights, benchmark_returns, benchmark_returns)
             
-        # 5. Generate Cumulative Returns Backtest Time-series
         user_daily_ret = returns.dot(weights)
         opt_daily_ret = returns.dot(opt_weights)
         
@@ -419,22 +718,16 @@ def analyze():
             bench_cum = (1 + bench_daily_ret).cumprod() - 1
             timeseries_backtest['benchmark'] = bench_cum.tolist()
             
-        # 6. Monte Carlo Efficient Frontier & Correlation Matrix
         mc_results = monte_carlo_simulation(returns)
         corr_matrix = returns.corr().to_dict()
         
-        # 7. Generate Deep Dive Data
         deep_dive_data = generate_deep_dive_data(weights, returns, benchmark_returns)
+        wealth_forecast = monte_carlo_wealth(weights, returns, initial_investment=total_capital)
         
-        # 8. Generate Wealth Forecast
-        wealth_forecast = monte_carlo_wealth(weights, returns)
-        
-        # 9. New Institutional Features
         factor_exposure = calculate_factor_exposure(weights, returns, full_returns)
         rebalance_orders = calculate_rebalance(tickers, weights, opt_weights, latest_prices, total_capital)
         sentiment_news = get_sentiment_data(tickers)
         
-        # Assemble Response
         response = {
             'kpis': {
                 'user': user_kpis,
@@ -455,7 +748,8 @@ def analyze():
             'wealth_forecast': wealth_forecast,
             'factor_exposure': factor_exposure,
             'rebalance_orders': rebalance_orders,
-            'sentiment_news': sentiment_news
+            'sentiment_news': sentiment_news,
+            'telemetry': telemetry
         }
         
         return jsonify(response)
@@ -467,4 +761,4 @@ def analyze():
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(port=5050, debug=True)

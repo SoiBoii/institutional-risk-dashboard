@@ -34,230 +34,233 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     
+    
+    <!-- html2pdf for Tear Sheet -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
     <style>
-        body {
-            background-color: #09090b;
-            color: #e5e7eb;
-            background-image: 
-                linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
+        /* Keep existing styles */
+        body { background-color: #09090b; color: #e5e7eb; font-family: 'Inter', sans-serif;
+            background-image: linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
             background-size: 30px 30px;
-            font-family: 'Inter', sans-serif;
         }
-        .font-mono {
-            font-family: 'Space Mono', monospace;
-        }
-        .cyber-panel {
-            background: rgba(9, 9, 11, 0.85);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(0, 243, 255, 0.15);
-            box-shadow: 0 0 15px rgba(0, 243, 255, 0.02);
-            transition: all 0.2s ease;
-        }
-        .cyber-panel:hover {
-            border-color: rgba(0, 243, 255, 0.4);
-            box-shadow: 0 0 20px rgba(0, 243, 255, 0.1);
-        }
-        .cyber-input {
-            background: rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(0, 243, 255, 0.3);
-            color: #00f3ff;
-            transition: all 0.2s;
-        }
-        .cyber-input:focus {
-            outline: none;
-            border-color: #00f3ff;
-            box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
-        }
-        .cyber-btn {
-            background: rgba(0, 243, 255, 0.05);
-            border: 1px solid #00f3ff;
-            color: #00f3ff;
-            transition: all 0.2s;
-        }
-        .cyber-btn:hover {
-            background: rgba(0, 243, 255, 0.2);
-            box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
-        }
-        .loader {
-            border: 2px solid rgba(0, 243, 255, 0.1);
-            border-top: 2px solid #00f3ff;
-            border-radius: 50%;
-            width: 16px;
-            height: 16px;
-            animation: spin 1s linear infinite;
-        }
+        .font-mono { font-family: 'Space Mono', monospace; }
+        .cyber-panel { background: rgba(9, 9, 11, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(0, 243, 255, 0.15); box-shadow: 0 0 15px rgba(0, 243, 255, 0.02); transition: all 0.2s ease; }
+        .cyber-panel:hover { border-color: rgba(0, 243, 255, 0.4); box-shadow: 0 0 20px rgba(0, 243, 255, 0.1); }
+        .cyber-input { background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(0, 243, 255, 0.3); color: #00f3ff; transition: all 0.2s; }
+        .cyber-input:focus { outline: none; border-color: #00f3ff; box-shadow: 0 0 10px rgba(0, 243, 255, 0.3); }
+        .cyber-btn { background: rgba(0, 243, 255, 0.05); border: 1px solid #00f3ff; color: #00f3ff; transition: all 0.2s; }
+        .cyber-btn:hover { background: rgba(0, 243, 255, 0.2); box-shadow: 0 0 15px rgba(0, 243, 255, 0.4); }
+        .loader { border: 2px solid rgba(0, 243, 255, 0.1); border-top: 2px solid #00f3ff; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
+        
+        /* New Animations */
+        @keyframes bootSequence {
+            0% { filter: blur(10px) brightness(0.5); opacity: 0; transform: scale(0.98); }
+            50% { filter: blur(2px) brightness(1.2); opacity: 0.8; }
+            100% { filter: blur(0px) brightness(1); opacity: 1; transform: scale(1); }
+        }
+        .animate-boot { animation: bootSequence 1s cubic-bezier(0.1, 0.8, 0.1, 1) forwards; }
+        .animate-pulse-red { animation: pulseRed 2s infinite; }
+        @keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(255, 0, 60, 0.7); border-color: rgba(255, 0, 60, 1); } 70% { box-shadow: 0 0 0 10px rgba(255, 0, 60, 0); border-color: rgba(255, 0, 60, 0.3); } 100% { box-shadow: 0 0 0 0 rgba(255, 0, 60, 0); border-color: rgba(255, 0, 60, 1); } }
     </style>
+
 </head>
 
 <body class="antialiased min-h-screen pb-12">
 
     <!-- Toast -->
     <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 hidden transition-opacity duration-300">
-        <div class="bg-black/90 border border-cyber-red text-cyber-red px-6 py-3 rounded-none font-mono text-sm shadow-[0_0_15px_rgba(255,0,60,0.5)] flex items-center gap-3">
-            <span>[ERROR]</span>
+        <div id="toast-bg" class="bg-black/90 border border-cyber-red text-cyber-red px-6 py-3 rounded-none font-mono text-sm shadow-[0_0_15px_rgba(255,0,60,0.5)] flex items-center gap-3">
+            <span id="toast-icon">[SYS]</span>
             <span id="toast-msg"></span>
         </div>
     </div>
 
-    <div class="max-w-[1500px] mx-auto px-4 py-8">
-        <!-- Header & Controls -->
-        <header class="mb-8 flex flex-col xl:flex-row xl:items-end justify-between gap-6 border-b border-cyber-cyan/20 pb-6">
-            <div>
-                <h1 class="text-3xl font-bold tracking-widest text-white flex items-center gap-3 font-mono uppercase">
-                    <span class="text-cyber-cyan">sys.</span>Quant_Engine
-                </h1>
-                <p class="mt-2 text-cyber-cyan/60 font-mono text-xs uppercase tracking-widest">>> Predictive Analytics & Risk Modeling HUD</p>
+    <!-- Auth Modal -->
+    <div id="auth-modal" class="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4">
+        <div class="cyber-panel p-8 w-full max-w-md relative">
+            <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-cyber-cyan/50 hover:text-cyber-cyan font-mono">[X]</button>
+            <h2 id="auth-title" class="text-2xl font-mono text-cyber-cyan mb-6 tracking-widest uppercase drop-shadow-[0_0_8px_rgba(0,243,255,0.4)]">> SYSTEM_LOGIN</h2>
+            <div class="space-y-4 font-mono">
+                <div>
+                    <label class="block text-[10px] text-cyber-cyan/70 mb-1 uppercase">User_Handle</label>
+                    <input type="text" id="auth-username" class="cyber-input w-full px-3 py-2 text-sm" placeholder="root">
+                </div>
+                <div>
+                    <label class="block text-[10px] text-cyber-cyan/70 mb-1 uppercase">Access_Code</label>
+                    <input type="password" id="auth-password" class="cyber-input w-full px-3 py-2 text-sm" placeholder="********">
+                </div>
+                <button id="auth-submit-btn" onclick="submitAuth()" class="cyber-btn w-full py-3 mt-4 tracking-widest uppercase font-bold shadow-[0_0_10px_rgba(0,243,255,0.2)]">AUTHENTICATE</button>
+                <div class="text-center mt-4">
+                    <button onclick="toggleAuthMode()" id="auth-toggle-btn" class="text-[10px] text-cyber-cyan/50 hover:text-cyber-cyan underline transition-colors">INITIATE NEW PROTOCOL (REGISTER)</button>
+                </div>
             </div>
+        </div>
+    </div>
 
-            <!-- Controls -->
-            <div class="cyber-panel p-4 rounded-none flex flex-wrap items-end gap-4 w-full xl:w-auto">
-                <div class="w-full sm:w-auto">
-                    <label class="block text-[10px] font-mono text-cyber-cyan/70 mb-1 uppercase tracking-wider">Target_Assets</label>
-                    <input type="text" id="tickers" value="AAPL, TSLA, NVDA" class="cyber-input w-full sm:w-48 text-sm px-3 py-2 font-mono">
-                </div>
-                <div class="w-full sm:w-auto">
-                    <label class="block text-[10px] font-mono text-cyber-cyan/70 mb-1 uppercase tracking-wider">Allocation_Matrix</label>
-                    <input type="text" id="weights" value="0.4, 0.3, 0.3" class="cyber-input w-full sm:w-40 text-sm px-3 py-2 font-mono">
-                </div>
-                <div class="w-full sm:w-auto">
-                    <label class="block text-[10px] font-mono text-cyber-cyan/70 mb-1 uppercase tracking-wider">Hist_Window</label>
-                    <select id="timeframe" class="cyber-input w-full sm:w-28 text-sm px-3 py-2 font-mono appearance-none cursor-pointer">
-                        <option value="1y">1_YEAR</option>
-                        <option value="3y">3_YEARS</option>
-                        <option value="5y">5_YEARS</option>
-                    </select>
-                </div>
-                <div class="w-full sm:w-auto">
-                    <label class="block text-[10px] font-mono text-cyber-cyan/70 mb-1 uppercase tracking-wider">Total_Capital</label>
-                    <input type="number" id="total_capital" value="100000" class="cyber-input w-full sm:w-32 text-sm px-3 py-2 font-mono">
-                </div>
-                <button id="run-btn" class="cyber-btn w-full sm:w-auto text-sm font-mono py-2 px-6 flex items-center justify-center gap-2 min-w-[140px]">
-                    <span id="btn-text">EXECUTE</span>
-                    <div id="loading" class="loader hidden"></div>
-                </button>
+    <div class="max-w-[1500px] mx-auto px-4 py-8">
+        <!-- Top Nav & Header -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-cyber-cyan/20 pb-4 gap-4">
+            <div>
+                <h1 class="text-3xl font-bold tracking-widest text-white flex items-center gap-3 font-mono uppercase drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">
+                    <span class="text-cyber-cyan drop-shadow-[0_0_8px_rgba(0,243,255,0.4)]">sys.</span>Quant_Engine
+                </h1>
+                <p class="mt-2 text-cyber-cyan/60 font-mono text-xs uppercase tracking-widest">>> Institutional Risk & Execution HUD</p>
             </div>
-        </header>
+            
+            <div id="auth-nav" class="flex gap-4 font-mono text-sm items-center">
+                <button onclick="openAuthModal('login')" class="text-cyber-cyan hover:text-white transition-colors">[ LOGIN ]</button>
+                <button onclick="openAuthModal('register')" class="text-cyber-purple hover:text-white transition-colors">[ REGISTER ]</button>
+            </div>
+            
+            <div id="user-nav" class="hidden flex-wrap justify-end items-center gap-3 font-mono text-sm w-full md:w-auto">
+                <div class="flex flex-col items-end mr-2 border-r border-cyber-cyan/30 pr-3">
+                    <span class="text-cyber-cyan text-[10px]">SYS_ADMIN: <span id="current-username" class="text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]"></span></span>
+                    <span class="text-cyber-green text-xs font-bold mt-1">TOTAL_ACCT: $<span id="total-account-value">0.00</span></span>
+                </div>
+                
+                <button onclick="openLeaderboard()" class="cyber-btn px-2 py-1 text-[10px] text-cyber-green border-cyber-green hover:bg-cyber-green/20">[ RANKINGS ]</button>
+                <button onclick="document.getElementById('settings-modal').classList.remove('hidden')" class="text-cyber-cyan/50 hover:text-white transition-colors ml-1 text-xs">⚙️</button>
+                <button onclick="exportPDF()" class="cyber-btn px-2 py-1 text-[10px] border-cyber-purple text-cyber-purple hover:bg-cyber-purple/20 hover:shadow-[0_0_15px_rgba(188,19,254,0.4)]">[ PDF_TEARSHEET ]</button>
+
+                <button onclick="savePortfolio()" class="cyber-btn px-2 py-1 text-[10px]">[ NEW_PORTFOLIO ]</button>
+                <select id="portfolio-select" onchange="loadSelectedPortfolio()" class="cyber-input px-2 py-1 text-[10px] max-w-[140px] appearance-none cursor-pointer bg-[#09090b]">
+                    <option value="">-- ACTIVE_PORTFOLIO --</option>
+                </select>
+                <button onclick="logout()" class="text-cyber-red hover:text-white transition-colors ml-2 text-xs">[ EXIT ]</button>
+            </div>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-6 w-full">
+            <!-- Left Main Column -->
+            <div class="flex-1 flex flex-col min-w-0">
+                <!-- Controls -->
+                <div class="cyber-panel p-4 rounded-none flex flex-wrap items-end gap-4 w-full mb-8">
+            <div class="w-full sm:w-auto flex-1 md:flex-none">
+                <label class="block text-[10px] font-mono text-cyber-cyan/70 mb-1 uppercase tracking-wider">Target_Assets</label>
+                <input type="text" id="tickers" value="AAPL, TSLA, NVDA" class="cyber-input w-full md:w-48 text-sm px-3 py-2 font-mono">
+            </div>
+            <div class="w-full sm:w-auto flex-1 md:flex-none">
+                <label class="block text-[10px] font-mono text-cyber-cyan/70 mb-1 uppercase tracking-wider">Allocation_Matrix</label>
+                <input type="text" id="weights" value="0.4, 0.3, 0.3" class="cyber-input w-full md:w-40 text-sm px-3 py-2 font-mono">
+            </div>
+            <div class="w-full sm:w-auto flex-1 md:flex-none">
+                <label class="block text-[10px] font-mono text-cyber-cyan/70 mb-1 uppercase tracking-wider">Hist_Window</label>
+                <select id="timeframe" class="cyber-input w-full md:w-28 text-sm px-3 py-2 font-mono appearance-none cursor-pointer">
+                    <option value="1y">1_YEAR</option>
+                    <option value="3y">3_YEARS</option>
+                    <option value="5y">5_YEARS</option>
+                </select>
+            </div>
+            <div class="w-full sm:w-auto flex-1 md:flex-none">
+                <label class="block text-[10px] font-mono text-cyber-cyan/70 mb-1 uppercase tracking-wider">Total_Capital</label>
+                <input type="number" id="total_capital" value="100000" class="cyber-input w-full md:w-32 text-sm px-3 py-2 font-mono">
+            </div>
+            <button id="run-btn" class="cyber-btn w-full md:w-auto text-sm font-mono py-2 px-6 flex items-center justify-center gap-2 min-w-[140px] shadow-[0_0_10px_rgba(0,243,255,0.1)]">
+                <span id="btn-text">EXECUTE</span>
+                <div id="loading" class="loader hidden"></div>
+            </button>
+        </div>
 
         <!-- Main Dashboard Content -->
         <div id="dashboard-content" class="hidden flex-col gap-6">
 
+            <!-- Asset Telemetry Grid -->
+            <div>
+                <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase mb-3 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-cyber-green animate-pulse"></span>
+                    >> ASSET_TELEMETRY (LIVE)
+                </h2>
+                <div id="telemetry-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
             <!-- KPI Grid -->
-            <div class="grid grid-cols-2 lg:grid-cols-6 gap-4">
-                <!-- Return -->
-                <div class="cyber-panel p-4 cursor-pointer group" onclick="openDeepDive('return', 'RETURN_DISTRIBUTION', 'Frequency histogram of daily returns')">
-                    <p class="text-[10px] text-cyber-cyan/70 font-mono mb-1 uppercase">Exp_Return</p>
-                    <h3 class="text-xl font-mono text-white mb-1" id="kpi-return">--</h3>
-                    <p class="text-[10px] font-mono text-cyber-cyan/50">Bench: <span id="kpi-bench-return">--</span></p>
-                </div>
-                <!-- Volatility -->
-                <div class="cyber-panel p-4 cursor-pointer group" onclick="openDeepDive('volatility', 'VOLATILITY_PROFILE', 'Dispersion of daily returns')">
-                    <p class="text-[10px] text-cyber-cyan/70 font-mono mb-1 uppercase">Volatility</p>
-                    <h3 class="text-xl font-mono text-white mb-1" id="kpi-vol">--</h3>
-                    <p class="text-[10px] font-mono text-cyber-cyan/50">Bench: <span id="kpi-bench-vol">--</span></p>
-                </div>
-                <!-- Sharpe -->
-                <div class="cyber-panel p-4 cursor-pointer group" onclick="openDeepDive('sharpe', 'ROLLING_SHARPE', '60-day rolling risk-adjusted return')">
-                    <p class="text-[10px] text-cyber-cyan/70 font-mono mb-1 uppercase">Sharpe_Ratio</p>
-                    <h3 class="text-xl font-mono text-white mb-1" id="kpi-sharpe">--</h3>
-                    <p class="text-[10px] font-mono text-cyber-cyan/50">Sortino: <span id="kpi-sortino" class="text-cyber-green">--</span></p>
-                </div>
-                <!-- MaxDD -->
-                <div class="cyber-panel p-4 cursor-pointer group" onclick="openDeepDive('maxdd', 'UNDERWATER_CURVE', 'Drawdowns from historical peaks')">
-                    <p class="text-[10px] text-cyber-cyan/70 font-mono mb-1 uppercase">Max_Drawdown</p>
-                    <h3 class="text-xl font-mono text-cyber-red mb-1" id="kpi-maxdd">--</h3>
-                    <p class="text-[10px] font-mono text-cyber-cyan/50">Worst Case Scenario</p>
-                </div>
-                <!-- VaR -->
-                <div class="cyber-panel p-4 cursor-pointer group" onclick="openDeepDive('return', 'VALUE_AT_RISK', '95% Confidence Interval')">
-                    <p class="text-[10px] text-cyber-cyan/70 font-mono mb-1 uppercase">VaR (95%)</p>
-                    <h3 class="text-xl font-mono text-cyber-red mb-1" id="kpi-var">--</h3>
-                    <p class="text-[10px] font-mono text-cyber-cyan/50">1-Day Exposure</p>
-                </div>
-                <!-- CVaR -->
-                <div class="cyber-panel p-4 cursor-pointer group" onclick="openDeepDive('return', 'CONDITIONAL_VAR', 'Expected Shortfall (Tail Risk)')">
-                    <p class="text-[10px] text-cyber-cyan/70 font-mono mb-1 uppercase">CVaR (95%)</p>
-                    <h3 class="text-xl font-mono text-cyber-red mb-1 drop-shadow-[0_0_5px_rgba(255,0,60,0.5)]" id="kpi-cvar">--</h3>
-                    <p class="text-[10px] font-mono text-cyber-cyan/50">Tail Risk Average</p>
-                </div>
-            </div>
-
-            <!-- Main Charts Grid -->
-            <!-- Top Row: Future Wealth & Backtest -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Wealth Forecasting -->
-                <div class="cyber-panel p-5 flex flex-col cursor-pointer group" onclick="openDeepDive('wealth', 'GBM_WEALTH_FORECAST', '10-Year Monte Carlo Path Projections')">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase">>> 10Y_Wealth_Projection</h2>
+            <div>
+                <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase mb-3">>> MACRO_KPIS</h2>
+                <div class="grid grid-cols-2 lg:grid-cols-6 gap-3">
+                    <div class="cyber-panel p-4 cursor-pointer group" onclick="openDeepDive('return', 'RETURN_DISTRIBUTION', 'Frequency histogram of daily returns')">
+                        <p class="text-[10px] text-cyber-cyan/70 font-mono mb-1 uppercase">Exp_Return</p>
+                        <h3 class="text-xl font-mono text-white mb-1" id="kpi-return">--</h3>
+                        <p class="text-[10px] font-mono text-cyber-cyan/50">Bench: <span id="kpi-bench-return">--</span></p>
                     </div>
-                    <div class="w-full h-[300px] relative">
-                        <canvas id="wealthChart"></canvas>
+                    <div class="cyber-panel p-4 cursor-pointer group" onclick="openDeepDive('volatility', 'VOLATILITY_PROFILE', 'Dispersion of daily returns')">
+                        <p class="text-[10px] text-cyber-cyan/70 font-mono mb-1 uppercase">Volatility</p>
+                        <h3 class="text-xl font-mono text-white mb-1" id="kpi-vol">--</h3>
+                        <p class="text-[10px] font-mono text-cyber-cyan/50">Bench: <span id="kpi-bench-vol">--</span></p>
                     </div>
-                </div>
-                <!-- Backtest -->
-                <div class="cyber-panel p-5 flex flex-col cursor-pointer group" onclick="openDeepDive('backtest', 'CUMULATIVE_RETURN', 'Historical performance trajectory')">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase">>> Hist_Backtest</h2>
+                    <div class="cyber-panel p-4 cursor-pointer group" onclick="openDeepDive('sharpe', 'ROLLING_SHARPE', '60-day rolling risk-adjusted return')">
+                        <p class="text-[10px] text-cyber-cyan/70 font-mono mb-1 uppercase">Sharpe_Ratio</p>
+                        <h3 class="text-xl font-mono text-white mb-1" id="kpi-sharpe">--</h3>
+                        <p class="text-[10px] font-mono text-cyber-cyan/50">Sortino: <span id="kpi-sortino" class="text-cyber-green">--</span></p>
                     </div>
-                    <div class="w-full h-[300px] relative">
-                        <canvas id="backtestChart"></canvas>
+                    <div class="cyber-panel p-4 cursor-pointer group" onclick="openDeepDive('maxdd', 'UNDERWATER_CURVE', 'Drawdowns from historical peaks')">
+                        <p class="text-[10px] text-cyber-cyan/70 font-mono mb-1 uppercase">Max_Drawdown</p>
+                        <h3 class="text-xl font-mono text-cyber-red mb-1" id="kpi-maxdd">--</h3>
+                        <p class="text-[10px] font-mono text-cyber-cyan/50">Worst Case Scenario</p>
+                    </div>
+                    <div class="cyber-panel p-4 cursor-pointer group" onclick="openDeepDive('return', 'VALUE_AT_RISK', '95% Confidence Interval')">
+                        <p class="text-[10px] text-cyber-cyan/70 font-mono mb-1 uppercase">VaR (95%)</p>
+                        <h3 class="text-xl font-mono text-cyber-red mb-1" id="kpi-var">--</h3>
+                        <p class="text-[10px] font-mono text-cyber-cyan/50">1-Day Exposure</p>
+                    </div>
+                    <div class="cyber-panel p-4 cursor-pointer group" onclick="openDeepDive('return', 'CONDITIONAL_VAR', 'Expected Shortfall (Tail Risk)')">
+                        <p class="text-[10px] text-cyber-cyan/70 font-mono mb-1 uppercase">CVaR (95%)</p>
+                        <h3 class="text-xl font-mono text-cyber-red mb-1 drop-shadow-[0_0_5px_rgba(255,0,60,0.5)]" id="kpi-cvar">--</h3>
+                        <p class="text-[10px] font-mono text-cyber-cyan/50">Tail Risk Average</p>
                     </div>
                 </div>
             </div>
 
-            <!-- Middle Row: Efficient Frontier & Underwater -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Efficient Frontier -->
-                <div class="cyber-panel p-5 flex flex-col cursor-pointer group" onclick="openDeepDive('frontier', 'EFFICIENT_FRONTIER', 'Risk/Reward Optimization Space')">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase">>> Optimization_Space</h2>
-                    </div>
-                    <div class="w-full h-[300px] relative">
-                        <canvas id="frontierChart"></canvas>
-                    </div>
+            <!-- Charts: Top Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
+                <div class="cyber-panel p-5 flex flex-col cursor-pointer group min-w-0 min-h-0" onclick="openDeepDive('wealth', 'GBM_WEALTH_FORECAST', '10-Year Monte Carlo Path Projections')">
+                    <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase mb-4">>> 10Y_Wealth_Projection</h2>
+                    <div class="w-full h-[280px] relative"><canvas id="wealthChart" class="w-full h-full"></canvas></div>
                 </div>
-                <!-- Underwater Curve -->
-                <div class="cyber-panel p-5 flex flex-col cursor-pointer group" onclick="openDeepDive('maxdd', 'UNDERWATER_CURVE', 'Drawdowns from historical peaks')">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase">>> Drawdown_Analysis</h2>
-                    </div>
-                    <div class="w-full h-[300px] relative">
-                        <canvas id="underwaterChart"></canvas>
-                    </div>
+                <div class="cyber-panel p-5 flex flex-col cursor-pointer group min-w-0 min-h-0" onclick="openDeepDive('backtest', 'CUMULATIVE_RETURN', 'Historical performance trajectory')">
+                    <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase mb-4">>> Hist_Backtest</h2>
+                    <div class="w-full h-[280px] relative"><canvas id="backtestChart" class="w-full h-full"></canvas></div>
                 </div>
             </div>
 
-            <!-- Bottom Row: Allocation & Correlation -->
+            <!-- Charts: Middle Row -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Allocation -->
-                <div class="cyber-panel p-5 cursor-pointer group" onclick="openDeepDive('allocation', 'WEIGHT_MATRIX', 'User vs Optimal Portfolios')">
+                <div class="cyber-panel p-5 flex flex-col cursor-pointer group min-w-0 min-h-0" onclick="openDeepDive('frontier', 'EFFICIENT_FRONTIER', 'Risk/Reward Optimization Space')">
+                    <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase mb-4">>> Optimization_Space</h2>
+                    <div class="w-full h-[280px] relative"><canvas id="frontierChart" class="w-full h-full"></canvas></div>
+                </div>
+                <div class="cyber-panel p-5 flex flex-col cursor-pointer group min-w-0 min-h-0" onclick="openDeepDive('maxdd', 'UNDERWATER_CURVE', 'Drawdowns from historical peaks')">
+                    <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase mb-4">>> Drawdown_Analysis</h2>
+                    <div class="w-full h-[280px] relative"><canvas id="underwaterChart" class="w-full h-full"></canvas></div>
+                </div>
+            </div>
+
+            <!-- Charts: Bottom Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="cyber-panel p-5 cursor-pointer group min-w-0 min-h-0" onclick="openDeepDive('allocation', 'WEIGHT_MATRIX', 'User vs Optimal Portfolios')">
                     <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase mb-4">>> Allocation_Matrix</h2>
-                    <div class="flex flex-col md:flex-row items-center gap-8 h-[250px]">
-                        <div class="w-full md:w-1/2 h-full relative">
-                            <canvas id="allocationChart"></canvas>
-                        </div>
-                        <div class="w-full md:w-1/2 flex flex-col gap-2 font-mono" id="allocation-legend">
-                        </div>
+                    <div class="flex flex-col md:flex-row items-center gap-6 h-[250px]">
+                        <div class="w-full md:w-1/2 h-full relative"><canvas id="allocationChart" class="w-full h-full"></canvas></div>
+                        <div class="w-full md:w-1/2 flex flex-col gap-2 font-mono overflow-y-auto max-h-[200px] pr-2" id="allocation-legend"></div>
                     </div>
                 </div>
-                <!-- Rolling Correlation -->
-                <div class="cyber-panel p-5 cursor-pointer group" onclick="openDeepDive('correlation', 'ROLLING_CORRELATION', '90-Day correlation vs S&P 500')">
+                <div class="cyber-panel p-5 cursor-pointer group min-w-0 min-h-0" onclick="openDeepDive('correlation', 'ROLLING_CORRELATION', '90-Day correlation vs S&P 500')">
                     <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase mb-4">>> Market_Correlation</h2>
-                    <div class="w-full h-[250px] relative">
-                        <canvas id="correlationChart"></canvas>
-                    </div>
+                    <div class="w-full h-[250px] relative"><canvas id="correlationChart" class="w-full h-full"></canvas></div>
                 </div>
             </div>
 
-            <!-- Row 4: Execution Terminal & Factor Overlay -->
+            <!-- Terminal & Factor Row -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Execution Terminal -->
                 <div class="cyber-panel p-5 flex flex-col">
                     <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase mb-4">>> Execution_Terminal</h2>
-                    <div class="w-full overflow-x-auto">
+                    <div class="w-full overflow-x-auto max-h-[250px] overflow-y-auto">
                         <table class="w-full text-left font-mono text-xs">
-                            <thead class="text-cyber-cyan/60 border-b border-cyber-cyan/20">
+                            <thead class="text-cyber-cyan/60 border-b border-cyber-cyan/20 sticky top-0 bg-[#09090b]/90 backdrop-blur-sm z-10">
                                 <tr>
                                     <th class="pb-2 font-normal">ASSET</th>
                                     <th class="pb-2 font-normal">ACTION</th>
@@ -265,54 +268,97 @@
                                     <th class="pb-2 font-normal text-right">VALUE</th>
                                 </tr>
                             </thead>
-                            <tbody id="execution-tbody" class="text-white">
-                                <!-- Populated dynamically -->
-                            </tbody>
+                            <tbody id="execution-tbody" class="text-white"></tbody>
                         </table>
                     </div>
                 </div>
-
-                <!-- Factor Exposure Radar -->
-                <div class="cyber-panel p-5 cursor-pointer group" onclick="openDeepDive('factor', 'FACTOR_EXPOSURE', 'Fama-French Proxy Betas')">
+                <div class="cyber-panel p-5 cursor-pointer group min-w-0 min-h-0" onclick="openDeepDive('factor', 'FACTOR_EXPOSURE', 'Fama-French Proxy Betas')">
                     <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase mb-4">>> Factor_Overlay</h2>
-                    <div class="w-full h-[250px] relative flex justify-center">
-                        <canvas id="factorChart"></canvas>
-                    </div>
+                    <div class="w-full h-[250px] relative flex justify-center"><canvas id="factorChart" class="w-full h-full"></canvas></div>
                 </div>
             </div>
 
-            <!-- Row 5: Live Comm-Link -->
+            <!-- Live Comm-Link -->
             <div class="grid grid-cols-1 gap-6">
                 <div class="cyber-panel p-5">
                     <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase mb-4 flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full bg-cyber-red animate-pulse"></span>
+                        <span class="w-2 h-2 rounded-full bg-cyber-red animate-pulse shadow-[0_0_5px_rgba(255,0,60,0.8)]"></span>
                         >> Live_Comm-Link
                     </h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="news-grid">
-                        <!-- Populated dynamically -->
-                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="news-grid"></div>
                 </div>
             </div>
-
         </div>
 
         <!-- Terminal Deep-Dive Modal -->
         <div id="chart-modal" class="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm hidden flex items-center justify-center p-4 sm:p-8">
             <div class="w-full max-w-7xl h-[85vh] bg-[#09090b] border-2 border-cyber-cyan/50 shadow-[0_0_30px_rgba(0,243,255,0.2)] p-6 relative flex flex-col">
-                <button id="close-modal" class="absolute top-4 right-4 text-cyber-cyan/50 hover:text-cyber-cyan transition-colors font-mono text-xl border border-transparent hover:border-cyber-cyan px-2">
-                    [X]
-                </button>
+                <button id="close-modal" class="absolute top-4 right-4 text-cyber-cyan/50 hover:text-cyber-cyan transition-colors font-mono text-xl px-2">[X]</button>
                 <div class="mb-6 border-b border-cyber-cyan/20 pb-4">
                     <h2 id="modal-title" class="text-2xl font-bold text-cyber-cyan uppercase tracking-widest flex items-center gap-3 font-mono drop-shadow-[0_0_8px_rgba(0,243,255,0.5)]">
                         > TERMINAL_VIEW
                     </h2>
                     <p id="modal-subtitle" class="text-cyber-cyan/60 text-sm mt-1 font-mono uppercase tracking-widest"></p>
                 </div>
-                <div class="w-full flex-1 relative bg-black border border-cyber-cyan/10 p-4">
-                    <canvas id="modalCanvas"></canvas>
+                <div class="w-full flex-1 relative bg-black border border-cyber-cyan/10 p-4 min-h-0">
+                    <canvas id="modalCanvas" class="w-full h-full"></canvas>
                 </div>
             </div>
         </div>
+
+        
+    <!-- Upgrade Modal -->
+    <div id="upgrade-modal" class="fixed inset-0 z-[200] bg-black/90 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="cyber-panel p-8 max-w-md w-full border-cyber-red/50 shadow-[0_0_30px_rgba(255,0,60,0.3)]">
+            <h2 class="text-2xl font-bold text-cyber-red uppercase font-mono mb-4 flex items-center gap-2">
+                <span class="animate-pulse-red w-3 h-3 bg-cyber-red rounded-full"></span> ACCESS_DENIED
+            </h2>
+            <p id="upgrade-message" class="text-white mb-6 font-mono text-sm"></p>
+            <div class="flex gap-4">
+                <button onclick="document.getElementById('upgrade-modal').classList.add('hidden')" class="cyber-btn flex-1 py-2 font-mono">DISMISS</button>
+                <button class="flex-1 py-2 font-mono bg-cyber-red text-white hover:bg-cyber-red/80 transition-colors border border-cyber-red shadow-[0_0_15px_rgba(255,0,60,0.5)]">UPGRADE_PRO</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaderboard Modal -->
+    <div id="leaderboard-modal" class="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="cyber-panel p-8 max-w-2xl w-full">
+            <h2 class="text-2xl font-bold text-cyber-cyan uppercase font-mono mb-6 border-b border-cyber-cyan/30 pb-2">
+                >> SHADOW_SERVER_RANKINGS
+            </h2>
+            <div class="overflow-y-auto max-h-[60vh] border border-cyber-cyan/10 p-2">
+                <table class="w-full text-left font-mono">
+                    <thead>
+                        <tr class="text-cyber-cyan/50 text-xs border-b border-cyber-cyan/20">
+                            <th class="pb-2 pl-2">RANK</th>
+                            <th class="pb-2">HANDLE</th>
+                            <th class="pb-2 text-right pr-2">RETURN</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboard-tbody" class="text-white text-sm">
+                    </tbody>
+                </table>
+            </div>
+            <button onclick="document.getElementById('leaderboard-modal').classList.add('hidden')" class="mt-6 cyber-btn px-6 py-2 font-mono">CLOSE</button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 z-[150] bg-black/90 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="cyber-panel p-8 max-w-sm w-full">
+            <h2 class="text-xl font-bold text-cyber-cyan uppercase font-mono mb-6 border-b border-cyber-cyan/30 pb-2">
+                >> UI_PREFERENCES
+            </h2>
+            <div class="flex flex-col gap-4 font-mono text-sm">
+                <p class="text-cyber-cyan/70">SELECT THEME_COLOR:</p>
+                <button onclick="updateTheme('cyan')" class="py-2 border border-[#00f3ff] text-[#00f3ff] hover:bg-[#00f3ff]/20">NEON_CYAN</button>
+                <button onclick="updateTheme('green')" class="py-2 border border-[#39ff14] text-[#39ff14] hover:bg-[#39ff14]/20">MATRIX_GREEN</button>
+                <button onclick="updateTheme('purple')" class="py-2 border border-[#bc13fe] text-[#bc13fe] hover:bg-[#bc13fe]/20">SYNTH_PURPLE</button>
+            </div>
+            <button onclick="document.getElementById('settings-modal').classList.add('hidden')" class="mt-6 cyber-btn w-full py-2 font-mono text-cyber-cyan/50">CLOSE</button>
+        </div>
+    </div>
 
         <!-- Empty State -->
         <div id="empty-state" class="flex flex-col items-center justify-center py-32 text-center">
@@ -324,8 +370,61 @@
             <h2 class="text-xl font-mono text-cyber-cyan tracking-widest uppercase drop-shadow-[0_0_8px_rgba(0,243,255,0.4)]">Awaiting_Input</h2>
             <p class="text-cyber-cyan/50 font-mono text-sm mt-2">Initialize parameters and execute sequence.</p>
         </div>
+            </div> <!-- End Left Main Column -->
+
+            <!-- Right Sidebar: Ledger & Watchlist -->
+            <div id="right-sidebar" class="w-full lg:w-[350px] flex-col gap-6 hidden">
+                <!-- Trade Blotter / Ledger -->
+                <div class="cyber-panel p-4 flex flex-col h-[400px]">
+                    <h2 class="text-xs font-mono text-cyber-purple tracking-widest uppercase mb-3 border-b border-cyber-purple/30 pb-2 drop-shadow-[0_0_5px_rgba(188,19,254,0.5)]">
+                        >> TRADE_BLOTTER
+                    </h2>
+                    
+                    <div class="flex gap-2 mb-3">
+                        <select id="trade-type" class="cyber-input text-[10px] px-2 py-1 w-20">
+                            <option value="BUY">BUY</option>
+                            <option value="SELL">SELL</option>
+                        </select>
+                        <input type="text" id="trade-ticker" placeholder="TICKER" class="cyber-input text-[10px] px-2 py-1 flex-1 uppercase">
+                        <input type="number" id="trade-qty" placeholder="QTY" class="cyber-input text-[10px] px-2 py-1 w-16">
+                        <button onclick="executeTrade()" class="cyber-btn text-[10px] px-3 py-1 bg-cyber-purple/10 border-cyber-purple text-cyber-purple hover:bg-cyber-purple/30">EXEC</button>
+                    </div>
+
+                    <div class="flex justify-between text-[10px] font-mono text-cyber-cyan/70 mb-2">
+                        <span>Basis: $<span id="ledger-basis">0.00</span></span>
+                        <span>PnL: <span id="ledger-pnl" class="text-white">0.00</span></span>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto min-h-0 border border-cyber-cyan/10 bg-black/50 p-2">
+                        <table class="w-full text-left font-mono text-[10px]">
+                            <tbody id="ledger-tbody" class="text-white">
+                                <tr><td class="text-center text-cyber-cyan/50 py-4">NO_TRANSACTIONS</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Watchlist Comm-Link -->
+                <div class="cyber-panel p-4 flex flex-col flex-1 min-h-[300px]">
+                    <h2 class="text-xs font-mono text-cyber-cyan tracking-widest uppercase mb-3 border-b border-cyber-cyan/30 pb-2">
+                        <span class="w-2 h-2 inline-block rounded-full bg-cyber-red animate-pulse mr-1"></span>
+                        >> WATCHLIST_LINK
+                    </h2>
+                    
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="wl-ticker" placeholder="TICKER" class="cyber-input text-[10px] px-2 py-1 flex-1 uppercase">
+                        <button onclick="addToWatchlist()" class="cyber-btn text-[10px] px-3 py-1">+</button>
+                    </div>
+
+                    <div id="watchlist-container" class="flex flex-col gap-2 overflow-y-auto min-h-0 pr-1">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div> <!-- End Right Sidebar -->
+        </div> <!-- End Flex Wrapper -->
     </div>
 
+    <!-- MAIN APP SCRIPT -->
     <script>
         // Cyberpunk Chart Defaults
         Chart.defaults.color = '#00f3ff';
@@ -340,72 +439,141 @@
         Chart.defaults.plugins.tooltip.titleFont = { family: "'Space Mono', monospace" };
         Chart.defaults.plugins.tooltip.bodyFont = { family: "'Space Mono', monospace" };
 
+        const hostname = window.location.hostname || 'localhost';
+        const API_URL = `http://${hostname === '127.0.0.1' ? '127.0.0.1' : 'localhost'}:5050`;
         let charts = {};
+        let sparklineCharts = [];
         let globalAnalysisData = null;
+        let portfoliosCache = [];
+        let currentPortfolioId = null;
+        let rightSidebar = document.getElementById('right-sidebar');
+        
+        
+        let userThemeColor = 'cyan';
+        const themeMap = {
+            'cyan': '#00f3ff',
+            'green': '#39ff14',
+            'purple': '#bc13fe'
+        };
+
+        function applyTheme(colorName) {
+            const hex = themeMap[colorName] || '#00f3ff';
+            userThemeColor = colorName;
+            Chart.defaults.color = hex;
+            Chart.defaults.scale.ticks.color = hex + '99';
+            Chart.defaults.plugins.tooltip.titleColor = hex;
+            Chart.defaults.plugins.tooltip.borderColor = hex;
+            mainChartOptions.plugins.tooltip.titleColor = hex;
+            mainChartOptions.plugins.tooltip.borderColor = hex + '66';
+            
+            // Dynamic CSS variable override would go here in a robust app
+            // For now, we update the primary chart styles
+        }
+        
+        async function updateTheme(colorName) {
+            try {
+                await fetch(`${API_URL}/settings`, {
+                    credentials: 'include',
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({theme_color: colorName})
+                });
+                applyTheme(colorName);
+                document.getElementById('settings-modal').classList.add('hidden');
+                showToast('THEME_UPDATED', 'success');
+                if(currentPortfolioId) refreshPortfolioState(); // re-render charts
+            } catch(e) {}
+        }
+
+        async function openLeaderboard() {
+            try {
+                const res = await fetch(`${API_URL}/leaderboard`, {
+                    credentials: 'include', credentials: 'include' });
+                const data = await res.json();
+                const tbody = document.getElementById('leaderboard-tbody');
+                tbody.innerHTML = data.leaderboard.map((u, i) => {
+                    const color = u.return >= 0 ? 'text-cyber-green' : 'text-cyber-red';
+                    const sign = u.return >= 0 ? '+' : '';
+                    return `
+                        <tr class="border-b border-cyber-cyan/10 hover:bg-white/5">
+                            <td class="py-3 pl-2 text-cyber-cyan">#${i+1}</td>
+                            <td class="py-3 font-bold">${u.username}</td>
+                            <td class="py-3 text-right pr-2 ${color}">${sign}${u.return.toFixed(2)}%</td>
+                        </tr>
+                    `;
+                }).join('');
+                document.getElementById('leaderboard-modal').classList.remove('hidden');
+            } catch(e) { showToast('ERROR_FETCHING_RANKINGS', 'error'); }
+        }
+
+        async function fetchAccountHistory() {
+            try {
+                const res = await fetch(`${API_URL}/account_history`, {
+                    credentials: 'include', credentials: 'include' });
+                const data = await res.json();
+                if(data.dates.length > 0) {
+                    document.getElementById('account-history-panel').classList.remove('hidden');
+                    const ctx = document.getElementById('accountHistoryChart').getContext('2d');
+                    if(charts.history) charts.history.destroy();
+                    charts.history = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.dates,
+                            datasets: [{
+                                label: 'Net Worth',
+                                data: data.values,
+                                borderColor: themeMap[userThemeColor],
+                                backgroundColor: themeMap[userThemeColor] + '22',
+                                fill: true, tension: 0.1, pointRadius: 2
+                            }]
+                        },
+                        options: { ...mainChartOptions }
+                    });
+                }
+            } catch(e) {}
+        }
 
         const neonColors = ['#00f3ff', '#bc13fe', '#39ff14', '#ff003c', '#facc15', '#f472b6'];
 
-        function destroyAllCharts() {
-            Object.values(charts).forEach(c => { if(c) c.destroy(); });
-            charts = {};
-        }
-
-        document.getElementById('run-btn').addEventListener('click', async () => {
-            const tickers = document.getElementById('tickers').value.split(',').map(t => t.trim().toUpperCase()).filter(t => t);
-            const weights = document.getElementById('weights').value.split(',').map(w => parseFloat(w.trim())).filter(w => !isNaN(w));
-            const timeframe = document.getElementById('timeframe').value;
-            const total_capital = parseFloat(document.getElementById('total_capital').value) || 100000;
-
-            if (tickers.length === 0 || tickers.length !== weights.length) {
-                showToast('INVALID_PARAMETER_MATRIX');
-                return;
-            }
-
-            setLoading(true);
-
-            try {
-                const response = await fetch('http://127.0.0.1:5000/analyze', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tickers, weights, timeframe, total_capital })
-                });
-
-                if (!response.ok) {
-                    const errData = await response.json();
-                    throw new Error(errData.error || 'SERVER_FAULT');
+        const mainChartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'nearest', intersect: false },
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: { color: '#e2e8f0', font: { family: "'Space Mono', 'Fira Code', monospace", size: 12 }, usePointStyle: true, boxWidth: 8 }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(9, 9, 11, 0.95)', titleColor: '#00f3ff', bodyColor: '#f8fafc',
+                    borderColor: 'rgba(0, 243, 255, 0.4)', borderWidth: 1, titleFont: { family: "'Space Mono', monospace", size: 13 },
+                    bodyFont: { family: "'Space Mono', monospace", size: 12 }, padding: 12, cornerRadius: 4, displayColors: true, boxPadding: 4
                 }
-
-                globalAnalysisData = await response.json();
-
-                document.getElementById('empty-state').classList.add('hidden');
-                document.getElementById('dashboard-content').classList.remove('hidden');
-                document.getElementById('dashboard-content').classList.add('flex');
-
-                updateKPIs(globalAnalysisData.kpis);
-                
-                destroyAllCharts();
-                
-                charts.wealth = drawWealthChart('wealthChart', globalAnalysisData.wealth_forecast);
-                charts.backtest = drawBacktestChart('backtestChart', globalAnalysisData.timeseries_backtest);
-                charts.frontier = drawFrontierChart('frontierChart', globalAnalysisData);
-                charts.underwater = drawUnderwaterChart('underwaterChart', globalAnalysisData.deep_dive_data.underwater);
-                charts.allocation = drawAllocationChart('allocationChart', globalAnalysisData.weights);
-                charts.correlation = drawCorrelationChart('correlationChart', globalAnalysisData.deep_dive_data.rolling_correlation);
-                charts.factor = drawFactorChart('factorChart', globalAnalysisData.factor_exposure);
-                
-                populateExecutionTerminal(globalAnalysisData.rebalance_orders);
-                populateNewsGrid(globalAnalysisData.sentiment_news);
-
-            } catch (error) {
-                console.error(error);
-                showToast(error.message);
-            } finally {
-                setLoading(false);
+            },
+            scales: {
+                x: { grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false }, ticks: { color: '#94a3b8', font: { family: "'Space Mono', monospace", size: 11 } } },
+                y: { grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false }, ticks: { color: '#94a3b8', font: { family: "'Space Mono', monospace", size: 11 } } }
             }
+        };
+
+
+        // On Load: Check Auth
+        window.addEventListener('DOMContentLoaded', async () => {
+            checkAuth();
         });
 
-        function showToast(msg) {
+        function showToast(msg, type = 'error') {
             const toast = document.getElementById('toast');
+            const bg = document.getElementById('toast-bg');
+            const icon = document.getElementById('toast-icon');
+            
+            if(type === 'success') {
+                bg.className = 'bg-black/90 border border-cyber-green text-cyber-green px-6 py-3 rounded-none font-mono text-sm shadow-[0_0_15px_rgba(57,255,20,0.5)] flex items-center gap-3';
+                icon.textContent = '[OK]';
+            } else {
+                bg.className = 'bg-black/90 border border-cyber-red text-cyber-red px-6 py-3 rounded-none font-mono text-sm shadow-[0_0_15px_rgba(255,0,60,0.5)] flex items-center gap-3';
+                icon.textContent = '[ERROR]';
+            }
+            
             document.getElementById('toast-msg').textContent = msg;
             toast.classList.remove('hidden');
             setTimeout(() => toast.classList.add('hidden'), 5000);
@@ -424,6 +592,462 @@
                 text.textContent = 'EXECUTE';
                 loader.classList.add('hidden');
             }
+        }
+
+        // --- Auth & State Logic ---
+
+        let authMode = 'login'; // login or register
+        
+        function openAuthModal(mode) {
+            authMode = mode;
+            updateAuthUI();
+            document.getElementById('auth-modal').classList.remove('hidden');
+        }
+
+        function closeAuthModal() {
+            document.getElementById('auth-modal').classList.add('hidden');
+            document.getElementById('auth-username').value = '';
+            document.getElementById('auth-password').value = '';
+        }
+
+        function toggleAuthMode() {
+            authMode = authMode === 'login' ? 'register' : 'login';
+            updateAuthUI();
+        }
+
+        function updateAuthUI() {
+            if (authMode === 'login') {
+                document.getElementById('auth-title').textContent = '> SYSTEM_LOGIN';
+                document.getElementById('auth-submit-btn').textContent = 'AUTHENTICATE';
+                document.getElementById('auth-toggle-btn').textContent = 'INITIATE NEW PROTOCOL (REGISTER)';
+            } else {
+                document.getElementById('auth-title').textContent = '> REGISTER_NODE';
+                document.getElementById('auth-submit-btn').textContent = 'INITIALIZE_USER';
+                document.getElementById('auth-toggle-btn').textContent = 'RETURN TO AUTHENTICATION (LOGIN)';
+            }
+        }
+
+        async function submitAuth() {
+            const u = document.getElementById('auth-username').value;
+            const p = document.getElementById('auth-password').value;
+            if(!u || !p) return showToast('CREDENTIALS_REQUIRED', 'error');
+
+            const endpoint = authMode === 'login' ? '/login' : '/register';
+            try {
+                const res = await fetch(`${API_URL}${endpoint}`, {
+                    credentials: 'include',
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({username: u, password: p})
+                });
+                const data = await res.json();
+                if(!res.ok) throw new Error(data.error || 'AUTH_FAULT');
+                
+                showToast(`ACCESS_GRANTED_FOR: ${data.username}`, 'success');
+                closeAuthModal();
+                checkAuth();
+            } catch(e) {
+                if(e.message === 'UPGRADE_REQUIRED' || e.message.includes('UPGRADE')) {
+                    document.getElementById('upgrade-message').textContent = e.message;
+                    document.getElementById('upgrade-modal').classList.remove('hidden');
+                } else { showToast(e.message, 'error'); }
+            }
+        }
+
+        async function checkAuth() {
+            try {
+                const res = await fetch(`${API_URL}/user_info`, {
+                    credentials: 'include', credentials: 'include' });
+                const data = await res.json();
+                if(data.logged_in) {
+                    document.getElementById('auth-nav').classList.add('hidden');
+                    document.getElementById('user-nav').classList.remove('hidden');
+                    document.getElementById('user-nav').classList.add('flex');
+                    document.getElementById('current-username').textContent = data.username;
+                    document.getElementById('total-account-value').textContent = (data.total_account_value || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
+                    
+                    
+                    applyTheme(data.theme_color);
+                    fetchAccountHistory();
+                    
+                    // Trigger Boot Animation
+
+                    document.body.classList.remove('animate-boot');
+                    void document.body.offsetWidth; // trigger reflow
+                    document.body.classList.add('animate-boot');
+                    
+                    rightSidebar.classList.remove('hidden');
+                    rightSidebar.classList.add('flex');
+                    
+                    loadPortfoliosDropdown();
+                    fetchWatchlist();
+                } else {
+                    document.getElementById('auth-nav').classList.remove('hidden');
+                    document.getElementById('user-nav').classList.add('hidden');
+                    document.getElementById('user-nav').classList.remove('flex');
+                    rightSidebar.classList.add('hidden');
+                    rightSidebar.classList.remove('flex');
+                    currentPortfolioId = null;
+                }
+            } catch(e) {
+                console.error('Check auth failed', e);
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch(`${API_URL}/logout`, {
+                    credentials: 'include', method: 'POST' });
+                showToast('CONNECTION_TERMINATED', 'success');
+                checkAuth();
+            } catch(e) {}
+        }
+
+        async function savePortfolio() {
+            const name = prompt("Enter Identifier for Current Layout:");
+            if(!name) return;
+            
+            const tickers = document.getElementById('tickers').value.split(/[\s,]+/).map(t=>t.trim());
+            const weights = document.getElementById('weights').value.split(/[\s,]+/).map(w=>parseFloat(w.trim()));
+            const timeframe = document.getElementById('timeframe').value;
+            const total_capital = parseFloat(document.getElementById('total_capital').value);
+
+            try {
+                const res = await fetch(`${API_URL}/save_portfolio`, {
+                    credentials: 'include',
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ portfolio_name: name, tickers, weights, timeframe, total_value: total_capital })
+                });
+                const data = await res.json();
+                if(!res.ok) throw new Error(data.error || 'SAVE_FAULT');
+                showToast('LAYOUT_SAVED_TO_MAINFRAME', 'success');
+                loadPortfoliosDropdown();
+            } catch(e) {
+                if(e.message === 'UPGRADE_REQUIRED' || e.message.includes('UPGRADE')) {
+                    document.getElementById('upgrade-message').textContent = e.message;
+                    document.getElementById('upgrade-modal').classList.remove('hidden');
+                } else { showToast(e.message, 'error'); }
+            }
+        }
+
+        async function loadPortfoliosDropdown() {
+            try {
+                const res = await fetch(`${API_URL}/load_portfolios`, {
+                    credentials: 'include', credentials: 'include' });
+                const data = await res.json();
+                portfoliosCache = data.portfolios || [];
+                
+                const select = document.getElementById('portfolio-select');
+                select.innerHTML = '<option value="">-- LOAD_LAYOUT --</option>';
+                portfoliosCache.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = p.name;
+                    select.appendChild(opt);
+                });
+            } catch(e) {}
+        }
+
+        async function loadSelectedPortfolio() {
+            const select = document.getElementById('portfolio-select');
+            const id = select.value;
+            if(!id) return;
+            currentPortfolioId = id;
+            
+            const port = portfoliosCache.find(p => p.id == id);
+            showToast(`PORTFOLIO_ACTIVE: ${port.name}`, 'success');
+            
+            await refreshPortfolioState();
+        }
+        
+        async function refreshPortfolioState() {
+            if(!currentPortfolioId) return;
+            try {
+                const res = await fetch(`${API_URL}/portfolio/${currentPortfolioId}/state`, {
+                    credentials: 'include', credentials: 'include' });
+                const data = await res.json();
+                if(!res.ok) { const err = new Error(data.message || data.error); err.type = data.error; throw err; }
+                
+                // Update UI Ledger
+                document.getElementById('ledger-basis').textContent = data.cost_basis.toLocaleString(undefined, {minimumFractionDigits: 2});
+                const pnlEl = document.getElementById('ledger-pnl');
+                pnlEl.textContent = (data.unrealized_pnl >= 0 ? '+' : '') + data.unrealized_pnl.toLocaleString(undefined, {minimumFractionDigits: 2});
+                pnlEl.className = data.unrealized_pnl >= 0 ? 'text-cyber-green' : 'text-cyber-red';
+                
+                const tbody = document.getElementById('ledger-tbody');
+                if(data.transactions.length === 0) {
+                    tbody.innerHTML = '<tr><td class="text-center text-cyber-cyan/50 py-4">NO_TRANSACTIONS</td></tr>';
+                } else {
+                    tbody.innerHTML = data.transactions.map(t => {
+                        const color = t.type === 'BUY' ? 'text-cyber-green' : 'text-cyber-red';
+                        return `
+                            <tr class="border-b border-cyber-cyan/10 hover:bg-white/5">
+                                <td class="py-1 text-cyber-cyan">${t.date.split(' ')[0].substring(5)}</td>
+                                <td class="py-1 font-bold ${color}">${t.type}</td>
+                                <td class="py-1">${t.ticker}</td>
+                                <td class="py-1 text-right">${t.quantity}</td>
+                                <td class="py-1 text-right">$${t.price.toFixed(2)}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+                
+                // Update Run Inputs
+                if(data.tickers.length > 0) {
+                    document.getElementById('tickers').value = data.tickers.join(', ');
+                    document.getElementById('weights').value = data.weights.map(w => w.toFixed(4)).join(', ');
+                    document.getElementById('total_capital').value = data.current_value.toFixed(2);
+                    
+                    // Auto Execute Quant Engine
+                    document.getElementById('run-btn').click();
+                } else {
+                    // Empty portfolio
+                    document.getElementById('tickers').value = '';
+                    document.getElementById('weights').value = '';
+                    document.getElementById('empty-state').classList.remove('hidden');
+                    document.getElementById('dashboard-content').classList.add('hidden');
+                    document.getElementById('dashboard-content').classList.remove('flex');
+                    destroyAllCharts();
+                }
+                
+                // Refresh total account value
+                fetch(`${API_URL}/user_info`, {
+                    credentials: 'include', credentials: 'include' }).then(r=>r.json()).then(d => {
+                    document.getElementById('total-account-value').textContent = (d.total_account_value || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
+                });
+                
+            } catch(e) {
+                if(e.message === 'UPGRADE_REQUIRED' || e.message.includes('UPGRADE')) {
+                    document.getElementById('upgrade-message').textContent = e.message;
+                    document.getElementById('upgrade-modal').classList.remove('hidden');
+                } else { showToast(e.message, 'error'); }
+            }
+        }
+        
+        async function executeTrade() {
+            if(!currentPortfolioId) return showToast('NO_ACTIVE_PORTFOLIO', 'error');
+            const ticker = document.getElementById('trade-ticker').value.toUpperCase();
+            const type = document.getElementById('trade-type').value;
+            const qty = document.getElementById('trade-qty').value;
+            
+            try {
+                const res = await fetch(`${API_URL}/portfolio/${currentPortfolioId}/trade`, {
+                    credentials: 'include',
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ticker, type, quantity: qty})
+                });
+                const data = await res.json();
+                if(!res.ok) { const err = new Error(data.message || data.error); err.type = data.error; throw err; }
+                showToast(`TRADE_EXEC: ${type} ${qty} ${ticker} @ $${data.price.toFixed(2)}`, 'success');
+                document.getElementById('trade-qty').value = '';
+                document.getElementById('trade-ticker').value = '';
+                await refreshPortfolioState();
+            } catch(e) {
+                if(e.message === 'UPGRADE_REQUIRED' || e.message.includes('UPGRADE')) {
+                    document.getElementById('upgrade-message').textContent = e.message;
+                    document.getElementById('upgrade-modal').classList.remove('hidden');
+                } else { showToast(e.message, 'error'); }
+            }
+        }
+        
+        async function fetchWatchlist() {
+            try {
+                const res = await fetch(`${API_URL}/watchlist`, {
+                    credentials: 'include', credentials: 'include' });
+                const data = await res.json();
+                const container = document.getElementById('watchlist-container');
+                container.innerHTML = '';
+                
+                data.watchlist.forEach(w => {
+                    const isAlert = w.change < -0.02; // dropped more than 2%
+                    const borderClass = isAlert ? 'border-cyber-red animate-pulse-red' : 'border-cyber-cyan/20 border';
+                    const colorClass = w.change >= 0 ? 'text-cyber-green' : 'text-cyber-red';
+                    const sign = w.change >= 0 ? '+' : '';
+                    
+                    container.innerHTML += `
+                        <div class="cyber-panel p-2 flex justify-between items-center ${borderClass}">
+                            <span class="font-mono font-bold text-cyber-cyan text-sm">${w.ticker}</span>
+                            <div class="text-right">
+                                <div class="text-xs text-white">$${w.price.toFixed(2)}</div>
+                                <div class="text-[10px] ${colorClass}">${sign}${(w.change*100).toFixed(2)}%</div>
+                            </div>
+                            <button onclick="removeFromWatchlist('${w.ticker}')" class="text-cyber-cyan/50 hover:text-cyber-red ml-2 text-xs">[X]</button>
+                        </div>
+                    `;
+                });
+            } catch(e) {}
+        }
+        
+        async function addToWatchlist() {
+            const ticker = document.getElementById('wl-ticker').value.toUpperCase();
+            if(!ticker) return;
+            try {
+                await fetch(`${API_URL}/watchlist`, {
+                    credentials: 'include',
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ticker})
+                });
+                document.getElementById('wl-ticker').value = '';
+                fetchWatchlist();
+            } catch(e) {}
+        }
+        
+        async function removeFromWatchlist(ticker) {
+            try {
+                await fetch(`${API_URL}/watchlist`, {
+                    credentials: 'include',
+                    method: 'DELETE', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ticker})
+                });
+                fetchWatchlist();
+            } catch(e) {}
+        }
+        
+        function exportPDF() {
+            const element = document.getElementById('dashboard-content');
+            if(element.classList.contains('hidden')) {
+                return showToast('NO_DATA_TO_EXPORT', 'error');
+            }
+            showToast('GENERATING_TEARSHEET...', 'success');
+            
+            // Temporary styles for PDF
+            element.style.background = '#09090b';
+            element.style.padding = '20px';
+            
+            html2pdf().set({
+                margin: 10,
+                filename: 'Institutional_TearSheet.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, logging: false },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+            }).from(element).save().then(() => {
+                element.style.background = 'transparent';
+                element.style.padding = '0';
+                showToast('TEARSHEET_EXPORTED', 'success');
+            });
+        }
+
+
+        // --- Core Execution Logic ---
+
+        function destroyAllCharts() {
+            Object.values(charts).forEach(c => { if(c) c.destroy(); });
+            charts = {};
+            sparklineCharts.forEach(c => c.destroy());
+            sparklineCharts = [];
+        }
+
+        document.getElementById('run-btn').addEventListener('click', async () => {
+            const tickers = document.getElementById('tickers').value.split(/[\s,]+/).map(t => t.trim().toUpperCase()).filter(t => t);
+            const weights = document.getElementById('weights').value.split(/[\s,]+/).map(w => parseFloat(w.trim())).filter(w => !isNaN(w));
+            const timeframe = document.getElementById('timeframe').value;
+            const total_capital = parseFloat(document.getElementById('total_capital').value) || 100000;
+
+            if (tickers.length === 0 || tickers.length !== weights.length) {
+                showToast('INVALID_PARAMETER_MATRIX', 'error');
+                return;
+            }
+
+            setLoading(true);
+
+            try {
+                const response = await fetch(`${API_URL}/analyze`, {
+                    credentials: 'include',
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tickers, weights, timeframe, total_capital })
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'SERVER_FAULT');
+
+                globalAnalysisData = data;
+
+                document.getElementById('empty-state').classList.add('hidden');
+                document.getElementById('dashboard-content').classList.remove('hidden');
+                document.getElementById('dashboard-content').classList.add('flex');
+
+                destroyAllCharts();
+                
+                populateTelemetryGrid(data.telemetry);
+                updateKPIs(data.kpis);
+                
+                charts.wealth = drawWealthChart('wealthChart', data.wealth_forecast);
+                charts.backtest = drawBacktestChart('backtestChart', data.timeseries_backtest);
+                charts.frontier = drawFrontierChart('frontierChart', data);
+                charts.underwater = drawUnderwaterChart('underwaterChart', data.deep_dive_data.underwater);
+                charts.allocation = drawAllocationChart('allocationChart', data.weights);
+                charts.correlation = drawCorrelationChart('correlationChart', data.deep_dive_data.rolling_correlation);
+                charts.factor = drawFactorChart('factorChart', data.factor_exposure);
+                
+                populateExecutionTerminal(data.rebalance_orders);
+                populateNewsGrid(data.sentiment_news);
+
+            } catch (error) {
+                console.error(error);
+                showToast(error.message, 'error');
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        // --- Render Helpers ---
+
+        function populateTelemetryGrid(telemetry) {
+            const grid = document.getElementById('telemetry-grid');
+            grid.innerHTML = '';
+            
+            if(!telemetry) return;
+
+            Object.keys(telemetry).forEach((ticker, idx) => {
+                const tData = telemetry[ticker];
+                const pct = tData.daily_change * 100;
+                const isPos = pct >= 0;
+                const colorClass = isPos ? 'text-cyber-green drop-shadow-[0_0_2px_rgba(57,255,20,0.8)]' : 'text-cyber-red drop-shadow-[0_0_2px_rgba(255,0,60,0.8)]';
+                const sign = isPos ? '+' : '';
+                const sparkColor = isPos ? '#39ff14' : '#ff003c';
+
+                const cardHTML = `
+                    <div onclick="openDeepDive('asset', '${ticker}', 'Historical Price Trajectory')" class="cyber-panel p-3 flex flex-col h-[100px] hover:border-cyber-cyan/50 cursor-pointer min-w-0 min-h-0">
+                        <div class="flex justify-between items-start mb-1">
+                            <span class="font-mono font-bold text-cyber-cyan text-sm">${ticker}</span>
+                            <span class="font-mono text-[10px] ${colorClass}">${sign}${pct.toFixed(2)}%</span>
+                        </div>
+                        <div class="font-mono text-lg text-white mb-1 leading-none">$${tData.current_price.toFixed(2)}</div>
+                        <div class="flex-1 relative w-full min-h-0 mt-1">
+                            <canvas id="spark-${ticker}" class="w-full h-full"></canvas>
+                        </div>
+                    </div>
+                `;
+                grid.insertAdjacentHTML('beforeend', cardHTML);
+                
+                // Draw sparkline after insertion
+                setTimeout(() => {
+                    const ctx = document.getElementById(`spark-${ticker}`).getContext('2d');
+                    const sparkChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: tData.sparkline.map((_, i) => i),
+                            datasets: [{
+                                data: tData.sparkline,
+                                borderColor: sparkColor,
+                                borderWidth: 1.5,
+                                pointRadius: 0,
+                                tension: 0.2,
+                                fill: false
+                            }]
+                        },
+                        options: {
+                            ...mainChartOptions,
+                            plugins: { ...mainChartOptions.plugins, legend: { display: false }, tooltip: { enabled: false } },
+                            scales: { x: { display: false }, y: { display: false } },
+                            layout: { padding: 0 }
+                        }
+                    });
+                    sparklineCharts.push(sparkChart);
+                }, 0);
+            });
         }
 
         function formatPct(val) { return (val * 100).toFixed(2) + '%'; }
@@ -461,9 +1085,9 @@
                     ]
                 },
                 options: {
-                    responsive: true, maintainAspectRatio: false,
+                    ...mainChartOptions,
                     interaction: { mode: 'index', intersect: false },
-                    scales: { y: { ticks: { callback: v => '$' + v.toLocaleString() } } }
+                    scales: { ...mainChartOptions.scales, y: { ...mainChartOptions.scales.y, ticks: { ...mainChartOptions.scales.y.ticks, callback: v => '$' + v.toLocaleString() } } }
                 }
             });
         }
@@ -479,7 +1103,7 @@
             return new Chart(document.getElementById(id), {
                 type: 'line',
                 data: { labels: ts.dates, datasets: datasets },
-                options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { y: { ticks: { callback: v => v + '%' } } } }
+                options: { ...mainChartOptions, interaction: { mode: 'index', intersect: false }, scales: { ...mainChartOptions.scales, y: { ...mainChartOptions.scales.y, ticks: { ...mainChartOptions.scales.y.ticks, callback: v => v + '%' } } } }
             });
         }
 
@@ -495,8 +1119,8 @@
                     ]
                 },
                 options: {
-                    responsive: true, maintainAspectRatio: false,
-                    scales: { x: { title: { display: true, text: 'Volatility %' } }, y: { title: { display: true, text: 'Return %' } } }
+                    ...mainChartOptions,
+                    scales: { ...mainChartOptions.scales, x: { ...mainChartOptions.scales.x, title: { display: true, text: 'Volatility %' } }, y: { ...mainChartOptions.scales.y, title: { display: true, text: 'Return %' } } }
                 }
             });
         }
@@ -508,7 +1132,7 @@
                     labels: underwater.dates,
                     datasets: [{ label: 'Drawdown', data: underwater.values.map(v => v * 100), borderColor: '#ff003c', backgroundColor: 'rgba(255, 0, 60, 0.2)', fill: true, pointRadius: 0, tension: 0.1 }]
                 },
-                options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { y: { ticks: { callback: v => v + '%' } } } }
+                options: { ...mainChartOptions, interaction: { mode: 'index', intersect: false }, scales: { ...mainChartOptions.scales, y: { ...mainChartOptions.scales.y, ticks: { ...mainChartOptions.scales.y.ticks, callback: v => v + '%' } } } }
             });
         }
 
@@ -519,7 +1143,7 @@
                     labels: corr.dates,
                     datasets: [{ label: '90D Correlation vs Bench', data: corr.values, borderColor: '#39ff14', backgroundColor: 'rgba(57, 255, 20, 0.1)', fill: true, pointRadius: 0, tension: 0.1 }]
                 },
-                options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } }
+                options: { ...mainChartOptions, interaction: { mode: 'index', intersect: false } }
             });
         }
 
@@ -533,14 +1157,14 @@
             tickers.forEach((t, i) => {
                 const color = neonColors[i % neonColors.length];
                 legend.innerHTML += `
-                    <div class="flex items-center justify-between text-xs border-b border-cyber-cyan/10 pb-1">
+                    <div class="flex items-center justify-between text-[10px] border-b border-cyber-cyan/10 pb-1">
                         <div class="flex items-center gap-2 text-cyber-cyan">
-                            <span class="w-2 h-2" style="background-color: ${color}"></span>
-                            <span>${t}</span>
+                            <span class="w-2 h-2 rounded-full shadow-[0_0_5px_${color}]" style="background-color: ${color}"></span>
+                            <span class="font-bold">${t}</span>
                         </div>
-                        <div class="flex gap-3">
-                            <span class="text-white">U:${userW[i].toFixed(0)}%</span>
-                            <span class="text-cyber-purple">O:${optW[i].toFixed(0)}%</span>
+                        <div class="flex gap-2 text-right">
+                            <span class="text-white/80">U:${userW[i].toFixed(0)}%</span>
+                            <span class="text-cyber-purple drop-shadow-[0_0_2px_rgba(188,19,254,0.5)]">O:${optW[i].toFixed(0)}%</span>
                         </div>
                     </div>`;
             });
@@ -554,7 +1178,7 @@
                         { label: 'User', data: userW, backgroundColor: neonColors.map(c=>c+'80'), borderColor: '#09090b', borderWidth: 1, cutout: '45%', radius: '70%' }
                     ]
                 },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                options: { ...mainChartOptions, plugins: { ...mainChartOptions.plugins, legend: { display: false } }, scales: {} }
             });
         }
 
@@ -574,9 +1198,9 @@
                     }]
                 },
                 options: {
-                    responsive: true, maintainAspectRatio: false,
+                    ...mainChartOptions,
                     scales: { r: { grid: { color: 'rgba(0, 243, 255, 0.1)' }, angleLines: { color: 'rgba(0, 243, 255, 0.1)' }, ticks: { display: false } } },
-                    plugins: { legend: { display: false } }
+                    plugins: { ...mainChartOptions.plugins, legend: { display: false } }
                 }
             });
         }
@@ -584,7 +1208,7 @@
         function populateExecutionTerminal(orders) {
             const tbody = document.getElementById('execution-tbody');
             if (!orders || orders.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-cyber-cyan/50">NO_ORDERS_REQUIRED</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="py-4 text-center text-cyber-cyan/50">NO_ORDERS_REQUIRED // PORTFOLIO_OPTIMAL</td></tr>';
                 return;
             }
             tbody.innerHTML = orders.map(o => {
@@ -604,27 +1228,30 @@
         function populateNewsGrid(news) {
             const grid = document.getElementById('news-grid');
             if (!news || news.length === 0) {
-                grid.innerHTML = '<div class="text-cyber-cyan/50 font-mono text-xs">NO_SIGNAL_DETECTED</div>';
+                grid.innerHTML = '<div class="text-cyber-cyan/50 font-mono text-xs col-span-full">NO_SIGNAL_DETECTED</div>';
                 return;
             }
             grid.innerHTML = news.map(n => {
-                let badgeColor = 'bg-cyber-gray text-white';
-                if (n.sentiment === 'BULL') badgeColor = 'bg-cyber-green text-black drop-shadow-[0_0_5px_rgba(57,255,20,0.8)]';
-                if (n.sentiment === 'BEAR') badgeColor = 'bg-cyber-red text-white drop-shadow-[0_0_5px_rgba(255,0,60,0.8)]';
+                let badgeColor = 'bg-cyber-cyan/20 text-cyber-cyan';
+                if (n.sentiment === 'BULL') badgeColor = 'bg-cyber-green/20 text-cyber-green border border-cyber-green/50';
+                if (n.sentiment === 'BEAR') badgeColor = 'bg-cyber-red/20 text-cyber-red border border-cyber-red/50';
                 
                 return `
-                    <div class="border border-cyber-cyan/10 bg-black/50 p-3 hover:border-cyber-cyan/30 transition-colors">
-                        <div class="flex justify-between items-start mb-2 gap-2">
-                            <span class="text-xs font-mono text-cyber-cyan bg-cyber-cyan/10 px-1 py-0.5 rounded">${n.ticker}</span>
-                            <span class="text-[10px] font-mono px-2 py-0.5 rounded uppercase font-bold tracking-wider ${badgeColor}">${n.sentiment}</span>
+                    <div class="border border-cyber-cyan/10 bg-black/50 p-3 hover:border-cyber-cyan/40 transition-colors flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-start mb-2 gap-2">
+                                <span class="text-xs font-mono text-cyber-cyan bg-cyber-cyan/10 px-1 py-0.5 rounded">${n.ticker}</span>
+                                <span class="text-[10px] font-mono px-2 py-0.5 rounded uppercase font-bold tracking-wider ${badgeColor}">${n.sentiment}</span>
+                            </div>
+                            <p class="text-xs text-white/80 line-clamp-2 leading-relaxed" title="${n.headline}">${n.headline}</p>
                         </div>
-                        <p class="text-xs text-white/80 line-clamp-2 leading-relaxed" title="${n.headline}">${n.headline}</p>
                     </div>
                 `;
             }).join('');
         }
 
-        // Deep Dive Modal Logic
+        // --- Deep Dive Modal Logic ---
+
         function openDeepDive(metricKey, title, subtitle) {
             if (!globalAnalysisData && !charts[metricKey]) return;
             
@@ -635,7 +1262,7 @@
             const ctx = document.getElementById('modalCanvas').getContext('2d');
             if (charts.modal) charts.modal.destroy();
             
-            // If it's a pre-rendered chart (wealth, backtest, frontier, correlation, factor)
+            // Re-render pre-existing charts directly
             if (['wealth', 'backtest', 'frontier', 'correlation', 'factor'].includes(metricKey)) {
                 const src = charts[metricKey];
                 const config = { type: src.config.type, data: JSON.parse(JSON.stringify(src.data)), options: JSON.parse(JSON.stringify(src.options)) };
@@ -648,7 +1275,35 @@
             const dd = globalAnalysisData.deep_dive_data;
             let config = { options: { responsive: true, maintainAspectRatio: false } };
 
-            if (metricKey === 'return' || metricKey === 'volatility') {
+            if (metricKey === 'asset') {
+                const tData = globalAnalysisData.telemetry[title];
+                if (!tData) return;
+                config.type = 'line';
+                config.data = {
+                    labels: tData.dates,
+                    datasets: [{
+                        label: title + ' Close',
+                        data: tData.history,
+                        borderColor: '#00f3ff',
+                        backgroundColor: 'rgba(0, 243, 255, 0.1)',
+                        fill: true,
+                        pointRadius: 0,
+                        borderWidth: 2,
+                        tension: 0.1
+                    }]
+                };
+                config.options = {
+                    ...mainChartOptions,
+                    scales: {
+                        ...mainChartOptions.scales,
+                        y: {
+                            ...mainChartOptions.scales.y,
+                            ticks: { ...mainChartOptions.scales.y.ticks, callback: v => '$' + v.toLocaleString() }
+                        }
+                    }
+                };
+                document.getElementById('modal-title').innerHTML = `> ASSET_HISTORY: ${title}`;
+            } else if (metricKey === 'return' || metricKey === 'volatility') {
                 config.type = 'bar';
                 config.data = {
                     labels: dd.histogram.bins.map(b => (b * 100).toFixed(1) + '%'),
@@ -687,9 +1342,11 @@
             document.getElementById('chart-modal').classList.add('hidden');
             if (charts.modal) { charts.modal.destroy(); charts.modal = null; }
         });
+        
         document.getElementById('chart-modal').addEventListener('click', (e) => {
             if (e.target.id === 'chart-modal') document.getElementById('close-modal').click();
         });
+
     </script>
 </body>
 </html>
