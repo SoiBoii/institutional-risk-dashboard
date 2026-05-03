@@ -48,3 +48,20 @@ This document provides a detailed breakdown of every quantitative metric compute
   * **10th Percentile (Bottom Line)**: The "Bear Market" scenario. There is a 90% statistical probability you will end up with *at least* this much money.
   * **50th Percentile (Middle Line)**: The "Base Case" or Median expectation.
   * **90th Percentile (Top Line)**: The "Bull Market" scenario. The optimistic upper bound of your wealth projection.
+
+---
+
+### 8. ML Anomaly Scanner (IsolationForest)
+* **What it is:** A machine learning model that detects statistically abnormal trading days — flash crashes, meme-stock surges, panic-selling events.
+* **How it's calculated:** Using `scikit-learn`'s `IsolationForest`, the model is trained on 2 years of daily returns and trading volume. An "anomaly" is a data point so far outside the statistical distribution that it is isolated by the model early (hence the name). The contamination threshold is set at `5%`, meaning the top 5% most extreme days are flagged.
+* **Why it matters:** Spotting anomalies gives traders context. A single anomalous day in a price chart is often the exact date of a major macro event (Fed rate hike, earnings miss, geopolitical shock). Understanding *when* these events occurred helps you avoid overreacting to random noise.
+
+### 9. Neural Projection Engine (ARIMA)
+* **What it is:** A quantitative time-series model that projects where an asset's price is likely to travel over the next 30 trading days.
+* **How it's calculated:** Using `statsmodels` ARIMA(5,1,0) — an Auto-Regressive Integrated Moving Average model. It learns the autocorrelation patterns in the historical price series (i.e., how much does today's price predict tomorrow's?) and projects this pattern forward. The confidence interval uses the model's own uncertainty to create an expanding cone.
+* **Why it matters:** The $R^2$ score tells you how well the model fits the history. The confidence cone tells you exactly how uncertain the forecast is — the wider the cone, the more volatile the asset is. This is institutional-grade forward-looking risk quantification.
+
+### 10. Dynamic Trade Blotter
+* **What it is:** A paper-trading simulator that makes portfolio rebalancing feel real and instantaneous.
+* **How it's calculated:** When you execute a trade (e.g., BUY 5 NVDA), the backend fetches the live market price, computes the exact dollar value of the order, and applies it to the portfolio's dollar-weighted asset allocation. The new percentage weights are derived from the updated dollar values: `new_weight[i] = new_dollar_value[i] / new_total_capital`.
+* **Why it matters:** Most dashboards require you to manually update weight percentages. The Trade Blotter treats the portfolio like a real brokerage account — you just enter how many shares to buy or sell, and every metric (Sharpe Ratio, CVaR, Efficient Frontier) is automatically recalculated against your new, post-trade allocation.
