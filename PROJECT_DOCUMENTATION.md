@@ -12,6 +12,7 @@ Far more than a simple static calculator, this application features a persistent
 * **Backend API:** Python 3, Flask.
 * **Database & Auth:** SQLite, Flask-SQLAlchemy, Flask-Login, Werkzeug Security (Password Hashing).
 * **Data Ingestion & Quant Libraries:** `yfinance` (Live market data), `pandas`, `numpy`, `TextBlob` (NLP).
+* **Machine Learning & Forecasting:** `scikit-learn` (IsolationForest), `statsmodels` (ARIMA).
 
 ---
 
@@ -19,7 +20,8 @@ Far more than a simple static calculator, this application features a persistent
 The backend serves as a high-powered calculation engine, completely abstracting the heavy lifting from the browser.
 * **Efficient Frontier & MPT:** Calculates covariance matrices to plot the optimal risk/reward frontier for any given basket of assets.
 * **Monte Carlo Simulations:** Runs 1,000+ stochastic simulations to project potential wealth paths over 10 years, plotting the 10th, 50th, and 90th percentile outcomes.
-* **Asset Telemetry:** Tracks standard deviation, trailing 30-day sparklines, and maximum drawdown profiles.
+* **Asset Telemetry & Anomaly Detection:** Tracks standard deviation, trailing sparklines, and uses an Isolation Forest ML algorithm to detect extreme volume/price spikes, placing neon warning overlays on charts.
+* **Neural Projection Engine:** Uses an ARIMA(5,1,0) autoregressive time-series model to calculate a forward 30-day predicted price trajectory with expanding 95% confidence intervals and an $R^2$ model confidence score.
 * **NLP News Sentiment:** Fetches recent headlines for portfolio assets and runs Natural Language Processing (via TextBlob) to score them as Bullish, Bearish, or Neutral.
 
 ---
@@ -33,8 +35,8 @@ The platform is fully session-aware. All user data is strictly barricaded behind
 ---
 
 ## 5. Gamification & Institutional Features
-### The Paper Trading Ledger (Trade Blotter)
-Instead of static weights, users execute simulated trades (Buy/Sell). The backend logs these as chronological `Transactions`. The system dynamically fetches live prices to calculate **Actual Cost Basis** and real-time **Unrealized P&L**, displaying them on a scrolling neon ledger.
+### The Dynamic Trade Blotter (Paper Trading)
+The trade blotter allows users to execute simulated live trades (Buy/Sell) across their assets. Upon entering an order, the system fetches the live market price, calculates the total dollar transaction, and instantly recomputes the global portfolio weights and capital distribution. It then logs the transaction visually and automatically retriggers a completely seamless re-analysis of the dashboard parameters in the background.
 
 ### The "Shadow Server" Leaderboard (Social Trading)
 Trading in a vacuum is boring. The platform aggregates the Total Account Value of all users, normalizes it against initial capital, and ranks the top 10 traders dynamically on a global leaderboard modal. 
@@ -55,6 +57,6 @@ A one-click `[ PDF_TEARSHEET ]` function. It temporarily strips away the backgro
 
 ## 6. How to Run
 1. Activate your virtual environment (if applicable).
-2. Install dependencies: `pip install flask flask-cors flask-sqlalchemy flask-login werkzeug yfinance pandas numpy textblob`
-3. Start the backend: `python3 app.py`
-4. Access the frontend dashboard: Host `index.html` via a local server (e.g., `python3 -m http.server 3000`) and navigate to `http://localhost:3000` in your browser. (Note: using localhost ensures session cookies map correctly to the Flask API).
+2. Install dependencies: `pip install flask flask-cors flask-sqlalchemy flask-login werkzeug yfinance pandas numpy scipy textblob scikit-learn statsmodels`
+3. Start the server: `python3 app.py`
+4. Access the frontend dashboard: Navigate to `http://127.0.0.1:5050` in your browser. The single-page application is served natively through Flask.

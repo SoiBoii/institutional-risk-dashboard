@@ -9,8 +9,8 @@ The platform is designed to ingest real-time market data, perform advanced stati
 ## 🛠 System Architecture
 
 The application is split into two primary components:
-1. **Backend (`app.py`)**: A Flask REST API that acts as the quantitative engine. It fetches data via Yahoo Finance, processes it using NumPy/Pandas/SciPy, and serves JSON payloads.
-2. **Frontend (`index.html`)**: A single-page application built with Vanilla JavaScript, Tailwind CSS, and Chart.js, designed as a highly interactive "Heads-Up Display" (HUD).
+1. **Backend (`app.py`)**: A Flask REST API that acts as the quantitative and ML engine. It manages authenticated user sessions, fetches data via Yahoo Finance, processes it using Scikit-Learn/Statsmodels/SciPy, and serves JSON payloads.
+2. **Frontend (`index.html`)**: A single-page application built with Vanilla JavaScript, Tailwind CSS, and Chart.js, designed as a highly interactive "Heads-Up Display" (HUD). Served directly from the Flask backend.
 
 ---
 
@@ -59,6 +59,17 @@ Accepts a `Total Capital` input and calculates the exact dollar and share flows 
 *   **Dollar Flow**: $(Capital \times Optimal\_Weight) - (Capital \times Current\_Weight)$
 *   **Shares to Trade**: $Dollar\_Flow / Latest\_Price$
 
+### 8. Machine Learning: Market Anomaly Detection
+Uses Scikit-Learn's `IsolationForest` on a 2-year rolling window of daily returns and trading volume to detect true market anomalies (flash crashes, extreme spikes). Outliers are exposed in the frontend as high-visibility warning triangles overlaid on asset charts.
+
+### 9. Machine Learning: Neural Projection Engine
+Uses the `statsmodels` ARIMA framework to build an autoregressive time-series model predicting a 30-day forward price path. It provides the forecasted prices, a 95% expanding confidence envelope, and an $R^2$ model confidence score based on in-sample fit.
+
+### 10. Persistent Session & Auth Management
+Fully authenticated SaaS endpoints utilizing `flask-login` and `SQLite`. Features include:
+*   **Persistent Portfolio Memory**: Automatically snapshots the latest HUD configuration to a database `_DEFAULT_SESSION_` and perfectly restores it on page reload.
+*   **Dynamic Trade Blotter**: A fully functional paper-trading ledger that simulates live trades, calculates dollar inflows/outflows, re-computes portfolio weights instantly, and seamlessly triggers a full quantitative re-analysis without reloading.
+
 ---
 
 ## 🖥 Frontend Implementation (`index.html`)
@@ -89,22 +100,16 @@ Extensively utilizes `Chart.js` for complex graphing:
 
 ### Requirements
 *   Python 3.8+
-*   `pip install flask flask-cors yfinance numpy pandas scipy textblob`
+*   `pip install flask flask-cors flask-login flask-sqlalchemy yfinance numpy pandas scipy textblob scikit-learn statsmodels`
 
 ### Execution
-1.  **Start the Backend**:
+1.  **Start the Server**:
     Open a terminal and run:
     ```bash
     python3 app.py
     ```
-    *The API will start on `http://127.0.0.1:5000`.*
-
-2.  **Start the Frontend**:
-    Open a second terminal in the project directory and run:
-    ```bash
-    python3 -m http.server 8000
-    ```
-    *Navigate your browser to `http://localhost:8000/index.html`.*
+2.  **Access the Dashboard**:
+    Navigate your browser to `http://127.0.0.1:5050`. The frontend is served seamlessly from the Flask backend.
 
 3.  **Analyze**:
-    Input your comma-separated tickers (e.g., `AAPL, MSFT, GOOG, NVDA`), their weights (e.g., `0.25, 0.25, 0.25, 0.25`), your total capital, and click **EXECUTE**.
+    Register an account or test as a guest. Input your comma-separated tickers (e.g., `AAPL, MSFT, GOOG, NVDA`), their weights (e.g., `0.25, 0.25, 0.25, 0.25`), your total capital, and click **EXECUTE**.

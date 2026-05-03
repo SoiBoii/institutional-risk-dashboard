@@ -21,8 +21,8 @@ from textblob import TextBlob
 ```
 * **`numpy` & `pandas`**: The backbone of quantitative finance. Used for vectorizing math operations and managing time-series dataframes.
 * **`yfinance`**: The bridge to Yahoo Finance, used to asynchronously fetch historical asset prices and real-time news headlines.
-* **`scipy`**: Used for `minimize` (Sequential Least Squares Programming for portfolio optimization) and `lstsq` (Multiple Linear Regression for factor exposure).
-* **`flask` & `CORS`**: Used to spin up the API server and allow cross-origin requests from the frontend.
+* **`scipy` & `scikit-learn` & `statsmodels`**: Used for optimization, `IsolationForest` anomaly detection, and `ARIMA` time-series forecasting.
+* **`flask`, `flask_sqlalchemy`, `flask_login`**: Used to spin up the API server, manage SQLite database models, and maintain persistent authenticated user sessions.
 * **`TextBlob`**: A Natural Language Processing (NLP) library used to determine the polarity (sentiment) of financial news.
 
 We define constant proxies for Factor Exposure:
@@ -53,8 +53,14 @@ Both functions are bounded by two constraints: bounds `(0, 1)` to prevent short-
 * `monte_carlo_wealth()`: Uses the **Geometric Brownian Motion (GBM)** stochastic equation to project 1,000 future wealth paths over 10 years. It returns the 10th, 50th, and 90th percentiles using `np.percentile`.
 * `calculate_factor_exposure()`: Runs `scipy.linalg.lstsq` (Least-Squares Regression) of the portfolio's daily returns against the returns of the Market, Size, and Value proxies to determine the Beta coefficients.
 
-### 6. Alternative Data & Execution
+### 6. Alternative Data & Machine Learning
 * `get_sentiment_data()`: For every ticker, it requests `t.news` from Yahoo Finance. It parses the nested `content['title']`, passes it to `TextBlob`, and categorizes the polarity as `BULL` (> 0.1), `BEAR` (< -0.1), or `NEUTRAL`.
+* `/api/ml/anomaly`: Uses `scikit-learn`'s `IsolationForest` on daily returns and volume. It identifies statistical outliers (flash crashes/spikes) and returns the dates to overlay neon warning triangles on the frontend charts.
+* `/api/ml/forecast`: Uses `statsmodels` `ARIMA(5,1,0)` to build an autoregressive neural projection. It calculates a 30-day forward price path, an expanding 95% confidence interval cone, and an $R^2$ accuracy score based on the in-sample fit.
+
+### 7. SaaS, Authentication, & Dynamic Trade Blotter
+* **Auth & State**: The app uses `flask_login`. When users log in, the `_DEFAULT_SESSION_` portfolio configuration is immediately loaded to perfectly restore their dashboard.
+* `/api/simulate_trade`: This endpoint powers the paper-trading ledger. Instead of manually editing weights, a user inputs a trade (e.g., BUY 10 TSLA). The backend fetches the live price, recalculates the entire portfolio's dollar values, subtracts or adds capital, and returns a perfectly rebalanced array of percentage weights.
 * `calculate_rebalance()`: Compares the user's current dollar allocation to the target (Max Sharpe) dollar allocation. The delta dictates the `BUY`/`SELL` action, and the `amount / latest_price` dictates the share quantity.
 
 ### 7. The `/analyze` Route
@@ -76,9 +82,9 @@ The frontend is a single-page application heavily optimized for speed, interacti
 * The frontend relies on vanilla JavaScript. Global state is stored in `let globalAnalysisData = null;` so that the Deep-Dive modals can access the raw math arrays without re-fetching from the server.
 * **Chart.js Defaults**: Chart.js global defaults are overridden to use neon cyan (`#00f3ff`) and the `Space Mono` font.
 
-### 3. Data Fetching: `fetchAnalysisData()`
-* Attached to the `EXECUTE` button. It reads the inputs (splitting the comma-separated strings into arrays), validates that the array lengths match, and sends a `POST` request using the `fetch` API to the Flask backend.
-* It toggles the visibility of the Empty State vs the Dashboard Content using `.classList.remove('hidden')`.
+### 3. Data Fetching & UI State: `runAnalysis()` & `initApp()`
+* `initApp()`: Attached to `DOMContentLoaded`. It pings the backend to check if the user is authenticated. If they are, it throws up a stunning "RESTORING SESSION" overlay, fetches their `_DEFAULT_SESSION_` matrix, populates the DOM, and fires the analysis engine so they drop back into exactly where they left off.
+* `runAnalysis()`: Attached to the `EXECUTE` button. It reads the inputs, sends a `POST` request to the backend, toggles visibility, and triggers an asynchronous, non-blocking auto-save of the new portfolio state back to the database.
 
 ### 4. Updating the UI
 Once the JSON payload is received:

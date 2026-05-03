@@ -70,6 +70,14 @@
 
 <body class="antialiased min-h-screen pb-12">
 
+    <!-- Session Restoration Overlay -->
+    <div id="restore-overlay" class="fixed inset-0 z-[999] bg-black/95 backdrop-blur-xl hidden flex flex-col items-center justify-center transition-opacity duration-1000">
+        <div class="loader w-12 h-12 border-4 mb-6"></div>
+        <h2 class="text-xl font-mono text-cyber-cyan tracking-widest uppercase animate-pulse drop-shadow-[0_0_10px_rgba(0,243,255,0.8)]">
+            [ RESTORING SECURE SESSION DATA... ]
+        </h2>
+    </div>
+
     <!-- Toast -->
     <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 hidden transition-opacity duration-300">
         <div id="toast-bg" class="bg-black/90 border border-cyber-red text-cyber-red px-6 py-3 rounded-none font-mono text-sm shadow-[0_0_15px_rgba(255,0,60,0.5)] flex items-center gap-3">
@@ -278,6 +286,33 @@
                 </div>
             </div>
 
+            <!-- Neural Projection Engine -->
+            <div class="grid grid-cols-1 gap-6 mb-6">
+                <div class="cyber-panel p-5">
+                    <h2 class="text-xs font-mono text-cyber-purple tracking-widest uppercase mb-4 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-cyber-purple animate-pulse shadow-[0_0_5px_rgba(188,19,254,0.8)]"></span>
+                        >> Neural_Projection_Engine
+                    </h2>
+                    <div class="flex gap-4 mb-4">
+                        <select id="neural-ticker-select" class="cyber-input text-sm px-3 py-2 w-48 font-mono">
+                            <option value="">-- SELECT ASSET --</option>
+                        </select>
+                        <button onclick="runNeuralForecast()" id="btn-neural" class="cyber-btn text-sm px-6 py-2 flex items-center gap-2 font-mono border-cyber-purple text-cyber-purple hover:bg-cyber-purple/20 shadow-[0_0_10px_rgba(188,19,254,0.1)]">
+                            <span id="neural-btn-text">INITIALIZE MODEL</span>
+                            <div id="neural-loader" class="loader hidden border-t-cyber-purple border-cyber-purple/20"></div>
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-4 mb-4 hidden" id="neural-confidence-container">
+                        <span class="text-[10px] font-mono text-cyber-cyan/70 uppercase">Model_Confidence (R²):</span>
+                        <div class="h-2 w-48 bg-black border border-cyber-cyan/30 relative">
+                            <div id="neural-confidence-bar" class="h-full bg-cyber-purple w-0 transition-all duration-1000 shadow-[0_0_5px_rgba(188,19,254,0.5)]"></div>
+                        </div>
+                        <span id="neural-confidence-text" class="text-[10px] font-mono text-cyber-purple">0.00</span>
+                    </div>
+                    <div class="w-full h-[300px] relative"><canvas id="neuralChart" class="w-full h-full"></canvas></div>
+                </div>
+            </div>
+
             <!-- Live Comm-Link -->
             <div class="grid grid-cols-1 gap-6">
                 <div class="cyber-panel p-5">
@@ -294,11 +329,20 @@
         <div id="chart-modal" class="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm hidden flex items-center justify-center p-4 sm:p-8">
             <div class="w-full max-w-7xl h-[85vh] bg-[#09090b] border-2 border-cyber-cyan/50 shadow-[0_0_30px_rgba(0,243,255,0.2)] p-6 relative flex flex-col">
                 <button id="close-modal" class="absolute top-4 right-4 text-cyber-cyan/50 hover:text-cyber-cyan transition-colors font-mono text-xl px-2">[X]</button>
-                <div class="mb-6 border-b border-cyber-cyan/20 pb-4">
-                    <h2 id="modal-title" class="text-2xl font-bold text-cyber-cyan uppercase tracking-widest flex items-center gap-3 font-mono drop-shadow-[0_0_8px_rgba(0,243,255,0.5)]">
-                        > TERMINAL_VIEW
-                    </h2>
-                    <p id="modal-subtitle" class="text-cyber-cyan/60 text-sm mt-1 font-mono uppercase tracking-widest"></p>
+                <div class="mb-6 border-b border-cyber-cyan/20 pb-4 flex justify-between items-end">
+                    <div>
+                        <h2 id="modal-title" class="text-2xl font-bold text-cyber-cyan uppercase tracking-widest flex items-center gap-3 font-mono drop-shadow-[0_0_8px_rgba(0,243,255,0.5)]">
+                            > TERMINAL_VIEW
+                        </h2>
+                        <p id="modal-subtitle" class="text-cyber-cyan/60 text-sm mt-1 font-mono uppercase tracking-widest"></p>
+                    </div>
+                    <div id="anomaly-toggle-container" class="hidden flex items-center gap-3">
+                        <span class="text-[10px] font-mono text-cyber-cyan/70 uppercase">Anomaly_Scanner:</span>
+                        <button onclick="toggleAnomalyOverlay()" id="btn-anomaly" class="cyber-btn text-xs px-4 py-1 flex items-center gap-2 border-cyber-red text-cyber-red hover:bg-cyber-red/20 shadow-[0_0_10px_rgba(255,0,60,0.1)]">
+                            <span id="anomaly-btn-text">OFF</span>
+                            <div id="anomaly-loader" class="loader hidden border-t-cyber-red border-cyber-red/20 w-3 h-3 border-2"></div>
+                        </button>
+                    </div>
                 </div>
                 <div class="w-full flex-1 relative bg-black border border-cyber-cyan/10 p-4 min-h-0">
                     <canvas id="modalCanvas" class="w-full h-full"></canvas>
@@ -556,10 +600,45 @@
         };
 
 
-        // On Load: Check Auth
+        // On Load: Check Auth & Init
         window.addEventListener('DOMContentLoaded', async () => {
-            checkAuth();
+            await initApp();
         });
+
+        async function initApp() {
+            const restoreOverlay = document.getElementById('restore-overlay');
+            try {
+                const res = await fetch(`${API_URL}/api/auth/status`, { credentials: 'include' });
+                const authData = await res.json();
+
+                if (authData.logged_in) {
+                    if (restoreOverlay) restoreOverlay.classList.remove('hidden');
+                    await checkAuth(); // Sets up UI, handles theme, etc.
+                    
+                    // Fetch saved portfolio
+                    const loadRes = await fetch(`${API_URL}/api/portfolio/load`, { credentials: 'include' });
+                    const loadData = await loadRes.json();
+
+                    if (loadRes.ok && loadData.tickers && loadData.tickers.length > 0) {
+                        document.getElementById('tickers').value = loadData.tickers.join(', ');
+                        document.getElementById('weights').value = loadData.weights.join(', ');
+                        document.getElementById('total_capital').value = loadData.total_value || 100000;
+                        if (loadData.timeframe) document.getElementById('timeframe').value = loadData.timeframe;
+                        
+                        await runAnalysis();
+                    }
+                } else {
+                    await checkAuth(); // Handles logged-out UI setup
+                }
+            } catch (err) {
+                console.error("Initialization fault:", err);
+            } finally {
+                if (restoreOverlay) {
+                    restoreOverlay.style.opacity = '0';
+                    setTimeout(() => restoreOverlay.classList.add('hidden'), 1000);
+                }
+            }
+        }
 
         function showToast(msg, type = 'error') {
             const toast = document.getElementById('toast');
@@ -633,6 +712,14 @@
             if(!u || !p) return showToast('CREDENTIALS_REQUIRED', 'error');
 
             const endpoint = authMode === 'login' ? '/login' : '/register';
+            
+            // Capture guest inputs
+            const guestTickers = document.getElementById('tickers').value.split(/[\s,]+/).map(t => t.trim().toUpperCase()).filter(t => t);
+            const guestWeights = document.getElementById('weights').value.split(/[\s,]+/).map(w => parseFloat(w.trim())).filter(w => !isNaN(w));
+            const guestTotalValue = parseFloat(document.getElementById('total_capital').value) || 100000;
+            const guestTimeframe = document.getElementById('timeframe').value;
+            const guestHasData = guestTickers.length > 0 && guestTickers.length === guestWeights.length;
+
             try {
                 const res = await fetch(`${API_URL}${endpoint}`, {
                     credentials: 'include',
@@ -645,7 +732,21 @@
                 
                 showToast(`ACCESS_GRANTED_FOR: ${data.username}`, 'success');
                 closeAuthModal();
-                checkAuth();
+                
+                if (guestHasData) {
+                    try {
+                        await fetch(`${API_URL}/api/portfolio/save`, {
+                            credentials: 'include',
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ tickers: guestTickers, weights: guestWeights, total_value: guestTotalValue, timeframe: guestTimeframe })
+                        });
+                    } catch (err) {
+                        console.error('Failed to attach guest portfolio to user', err);
+                    }
+                }
+                
+                await initApp();
             } catch(e) {
                 if(e.message === 'UPGRADE_REQUIRED' || e.message.includes('UPGRADE')) {
                     document.getElementById('upgrade-message').textContent = e.message;
@@ -826,23 +927,63 @@
         }
         
         async function executeTrade() {
-            if(!currentPortfolioId) return showToast('NO_ACTIVE_PORTFOLIO', 'error');
-            const ticker = document.getElementById('trade-ticker').value.toUpperCase();
-            const type = document.getElementById('trade-type').value;
-            const qty = document.getElementById('trade-qty').value;
+            const tradeTicker = document.getElementById('trade-ticker').value.toUpperCase();
+            const tradeType = document.getElementById('trade-type').value;
+            const tradeQty = document.getElementById('trade-qty').value;
+            
+            const currentTickers = document.getElementById('tickers').value.split(/[\s,]+/).map(t => t.trim().toUpperCase()).filter(t => t);
+            const currentWeights = document.getElementById('weights').value.split(/[\s,]+/).map(w => parseFloat(w.trim())).filter(w => !isNaN(w));
+            const currentTotalCapital = parseFloat(document.getElementById('total_capital').value) || 100000;
+            
+            if (currentTickers.length === 0 || currentTickers.length !== currentWeights.length) {
+                return showToast('INVALID_CURRENT_PORTFOLIO', 'error');
+            }
             
             try {
-                const res = await fetch(`${API_URL}/portfolio/${currentPortfolioId}/trade`, {
+                const res = await fetch(`${API_URL}/api/simulate_trade`, {
                     credentials: 'include',
                     method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ticker, type, quantity: qty})
+                    body: JSON.stringify({
+                        tickers: currentTickers,
+                        weights: currentWeights,
+                        total_capital: currentTotalCapital,
+                        trade_ticker: tradeTicker,
+                        trade_type: tradeType,
+                        trade_qty: tradeQty
+                    })
                 });
                 const data = await res.json();
                 if(!res.ok) { const err = new Error(data.message || data.error); err.type = data.error; throw err; }
-                showToast(`TRADE_EXEC: ${type} ${qty} ${ticker} @ $${data.price.toFixed(2)}`, 'success');
+                
+                showToast(`TRADE_EXEC: ${tradeType} ${tradeQty} ${tradeTicker} @ $${data.price.toFixed(2)}`, 'success');
+                
+                // Clear inputs
                 document.getElementById('trade-qty').value = '';
                 document.getElementById('trade-ticker').value = '';
-                await refreshPortfolioState();
+                
+                // Update DOM with new portfolio state
+                document.getElementById('tickers').value = data.tickers.join(', ');
+                document.getElementById('weights').value = data.weights.map(w => w.toFixed(4)).join(', ');
+                document.getElementById('total_capital').value = data.total_capital.toFixed(2);
+                
+                // Log to the visual trade blotter UI locally (so it feels responsive)
+                const tbody = document.getElementById('trade-blotter-body');
+                if (tbody) {
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-cyber-cyan/10 hover:bg-cyber-cyan/5 transition-colors';
+                    tr.innerHTML = `
+                        <td class="py-2 text-cyber-cyan">NOW</td>
+                        <td class="py-2">${tradeTicker}</td>
+                        <td class="py-2 ${tradeType === 'BUY' ? 'text-cyber-green' : 'text-cyber-red'}">${tradeType}</td>
+                        <td class="py-2 text-right">${tradeQty}</td>
+                        <td class="py-2 text-right">$${data.price.toFixed(2)}</td>
+                    `;
+                    tbody.prepend(tr);
+                }
+
+                // Execute Quant Engine
+                await runAnalysis();
+                
             } catch(e) {
                 if(e.message === 'UPGRADE_REQUIRED' || e.message.includes('UPGRADE')) {
                     document.getElementById('upgrade-message').textContent = e.message;
@@ -938,7 +1079,7 @@
             sparklineCharts = [];
         }
 
-        document.getElementById('run-btn').addEventListener('click', async () => {
+        async function runAnalysis() {
             const tickers = document.getElementById('tickers').value.split(/[\s,]+/).map(t => t.trim().toUpperCase()).filter(t => t);
             const weights = document.getElementById('weights').value.split(/[\s,]+/).map(w => parseFloat(w.trim())).filter(w => !isNaN(w));
             const timeframe = document.getElementById('timeframe').value;
@@ -971,6 +1112,7 @@
                 destroyAllCharts();
                 
                 populateTelemetryGrid(data.telemetry);
+                populateNeuralTickerSelect(data.telemetry);
                 updateKPIs(data.kpis);
                 
                 charts.wealth = drawWealthChart('wealthChart', data.wealth_forecast);
@@ -984,13 +1126,25 @@
                 populateExecutionTerminal(data.rebalance_orders);
                 populateNewsGrid(data.sentiment_news);
 
+                // Auto-save if user is logged in
+                if (!document.getElementById('user-nav').classList.contains('hidden')) {
+                    fetch(`${API_URL}/api/portfolio/save`, {
+                        credentials: 'include',
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tickers, weights, timeframe, total_value: total_capital })
+                    }).catch(e => console.error("Auto-save failed:", e));
+                }
+
             } catch (error) {
                 console.error(error);
                 showToast(error.message, 'error');
             } finally {
                 setLoading(false);
             }
-        });
+        }
+
+        document.getElementById('run-btn').addEventListener('click', runAnalysis);
 
         // --- Render Helpers ---
 
@@ -1048,6 +1202,22 @@
                     sparklineCharts.push(sparkChart);
                 }, 0);
             });
+        }
+
+        function populateNeuralTickerSelect(telemetry) {
+            const select = document.getElementById('neural-ticker-select');
+            select.innerHTML = '<option value="">-- SELECT ASSET --</option>';
+            if (!telemetry) return;
+            Object.keys(telemetry).forEach(ticker => {
+                const opt = document.createElement('option');
+                opt.value = ticker;
+                opt.textContent = ticker;
+                select.appendChild(opt);
+            });
+            
+            // clear the neural chart when new data is loaded
+            if (charts.neural) { charts.neural.destroy(); charts.neural = null; }
+            document.getElementById('neural-confidence-container').classList.add('hidden');
         }
 
         function formatPct(val) { return (val * 100).toFixed(2) + '%'; }
@@ -1252,14 +1422,30 @@
 
         // --- Deep Dive Modal Logic ---
 
+        let currentModalAsset = null;
+        let anomalyActive = false;
+
         function openDeepDive(metricKey, title, subtitle) {
-            if (!globalAnalysisData && !charts[metricKey]) return;
+            if (!globalAnalysisData && !charts[metricKey] && metricKey !== 'asset') return;
             
             document.getElementById('modal-title').innerHTML = `> ${title}`;
             document.getElementById('modal-subtitle').textContent = subtitle;
             document.getElementById('chart-modal').classList.remove('hidden');
 
+            const anomalyToggle = document.getElementById('anomaly-toggle-container');
+            if (metricKey === 'asset') {
+                currentModalAsset = title;
+                anomalyActive = false;
+                document.getElementById('anomaly-btn-text').textContent = 'OFF';
+                document.getElementById('btn-anomaly').className = 'cyber-btn text-xs px-4 py-1 flex items-center gap-2 border-cyber-red text-cyber-red hover:bg-cyber-red/20 shadow-[0_0_10px_rgba(255,0,60,0.1)]';
+                anomalyToggle.classList.remove('hidden');
+            } else {
+                currentModalAsset = null;
+                anomalyToggle.classList.add('hidden');
+            }
+
             const ctx = document.getElementById('modalCanvas').getContext('2d');
+
             if (charts.modal) charts.modal.destroy();
             
             // Re-render pre-existing charts directly
@@ -1341,7 +1527,190 @@
         document.getElementById('close-modal').addEventListener('click', () => {
             document.getElementById('chart-modal').classList.add('hidden');
             if (charts.modal) { charts.modal.destroy(); charts.modal = null; }
+            anomalyActive = false;
         });
+
+        // --- ML Feature Logic ---
+        
+        async function runNeuralForecast() {
+            const select = document.getElementById('neural-ticker-select');
+            const ticker = select.value;
+            if (!ticker) {
+                showToast('NO ASSET SELECTED FOR NEURAL PROJECTION', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('btn-neural');
+            const text = document.getElementById('neural-btn-text');
+            const loader = document.getElementById('neural-loader');
+            
+            btn.disabled = true;
+            text.textContent = '[ INITIATING NEURAL NETWORK... ]';
+            loader.classList.remove('hidden');
+
+            try {
+                const res = await fetch(`${API_URL}/api/ml/forecast`, {
+                    credentials: 'include',
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ticker })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'MODEL TRAINING FAILED');
+
+                // Render Chart
+                const ctx = document.getElementById('neuralChart').getContext('2d');
+                if (charts.neural) charts.neural.destroy();
+
+                const allDates = [...data.historical_dates, ...data.future_dates];
+                const histData = new Array(allDates.length).fill(null);
+                for (let i=0; i<data.historical_prices.length; i++) histData[i] = data.historical_prices[i];
+                
+                const predData = new Array(allDates.length).fill(null);
+                predData[data.historical_prices.length - 1] = data.historical_prices[data.historical_prices.length - 1]; // Connect lines
+                for (let i=0; i<data.predicted_prices.length; i++) predData[data.historical_prices.length + i] = data.predicted_prices[i];
+
+                const lowerData = new Array(allDates.length).fill(null);
+                lowerData[data.historical_prices.length - 1] = data.historical_prices[data.historical_prices.length - 1];
+                for (let i=0; i<data.lower_bound.length; i++) lowerData[data.historical_prices.length + i] = data.lower_bound[i];
+
+                const upperData = new Array(allDates.length).fill(null);
+                upperData[data.historical_prices.length - 1] = data.historical_prices[data.historical_prices.length - 1];
+                for (let i=0; i<data.upper_bound.length; i++) upperData[data.historical_prices.length + i] = data.upper_bound[i];
+
+                charts.neural = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: allDates,
+                        datasets: [
+                            {
+                                label: 'Historical',
+                                data: histData,
+                                borderColor: '#00f3ff',
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                fill: false,
+                                tension: 0.1
+                            },
+                            {
+                                label: 'AI Prediction',
+                                data: predData,
+                                borderColor: '#bc13fe',
+                                borderDash: [5, 5],
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                fill: false,
+                                tension: 0.1
+                            },
+                            {
+                                label: 'Upper Bound',
+                                data: upperData,
+                                borderColor: 'transparent',
+                                backgroundColor: 'rgba(188, 19, 254, 0.1)',
+                                fill: '+1',
+                                pointRadius: 0,
+                                tension: 0.1
+                            },
+                            {
+                                label: 'Lower Bound',
+                                data: lowerData,
+                                borderColor: 'transparent',
+                                backgroundColor: 'transparent',
+                                fill: false,
+                                pointRadius: 0,
+                                tension: 0.1
+                            }
+                        ]
+                    },
+                    options: {
+                        ...mainChartOptions,
+                        interaction: { mode: 'index', intersect: false },
+                        scales: { ...mainChartOptions.scales, y: { ...mainChartOptions.scales.y, ticks: { ...mainChartOptions.scales.y.ticks, callback: v => '$' + v.toLocaleString() } } }
+                    }
+                });
+
+                // Update Confidence Score
+                document.getElementById('neural-confidence-container').classList.remove('hidden');
+                document.getElementById('neural-confidence-text').textContent = (data.confidence_score * 100).toFixed(1) + '%';
+                document.getElementById('neural-confidence-bar').style.width = (data.confidence_score * 100) + '%';
+                
+            } catch (e) {
+                console.error(e);
+                showToast(`MODEL TRAINING FAILED: ${e.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                text.textContent = 'INITIALIZE MODEL';
+                loader.classList.add('hidden');
+            }
+        }
+
+        async function toggleAnomalyOverlay() {
+            if (!currentModalAsset || !charts.modal) return;
+            
+            const btn = document.getElementById('btn-anomaly');
+            const text = document.getElementById('anomaly-btn-text');
+            const loader = document.getElementById('anomaly-loader');
+
+            if (anomalyActive) {
+                // Turn off
+                anomalyActive = false;
+                text.textContent = 'OFF';
+                btn.className = 'cyber-btn text-xs px-4 py-1 flex items-center gap-2 border-cyber-red text-cyber-red hover:bg-cyber-red/20 shadow-[0_0_10px_rgba(255,0,60,0.1)]';
+                
+                // Remove anomaly dataset
+                charts.modal.data.datasets = charts.modal.data.datasets.filter(ds => ds.label !== 'Anomalies');
+                charts.modal.update();
+                return;
+            }
+
+            // Turn on - fetch anomalies
+            btn.disabled = true;
+            text.textContent = '[ TRAINING ISOLATION FOREST... ]';
+            loader.classList.remove('hidden');
+
+            try {
+                const res = await fetch(`${API_URL}/api/ml/anomaly`, {
+                    credentials: 'include',
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ticker: currentModalAsset })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'MODEL TRAINING FAILED');
+
+                anomalyActive = true;
+                text.textContent = 'ON';
+                btn.className = 'cyber-btn text-xs px-4 py-1 flex items-center gap-2 border-cyber-green text-cyber-green hover:bg-cyber-green/20 shadow-[0_0_10px_rgba(57,255,20,0.5)]';
+
+                // Map anomalies to chart dates
+                const chartDates = charts.modal.data.labels;
+                const anomalyData = chartDates.map(date => {
+                    const idx = data.dates.indexOf(date);
+                    return idx !== -1 ? data.prices[idx] : null;
+                });
+
+                charts.modal.data.datasets.push({
+                    label: 'Anomalies',
+                    data: anomalyData,
+                    borderColor: '#facc15', // Neon Yellow
+                    backgroundColor: '#facc15',
+                    pointStyle: 'triangle',
+                    pointRadius: 8,
+                    pointHoverRadius: 10,
+                    showLine: false
+                });
+                charts.modal.update();
+
+            } catch (e) {
+                console.error(e);
+                showToast(`MODEL TRAINING FAILED: ${e.message}`, 'error');
+                anomalyActive = false;
+                text.textContent = 'OFF';
+            } finally {
+                btn.disabled = false;
+                loader.classList.add('hidden');
+            }
+        }
         
         document.getElementById('chart-modal').addEventListener('click', (e) => {
             if (e.target.id === 'chart-modal') document.getElementById('close-modal').click();

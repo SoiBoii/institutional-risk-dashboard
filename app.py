@@ -1,5 +1,6 @@
 import json
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, session, send_from_directory
+import os
 from flask_cors import CORS
 import yfinance as yf
 import numpy as np
@@ -8,6 +9,10 @@ from scipy.optimize import minimize
 from datetime import datetime, timedelta
 import traceback
 from textblob import TextBlob
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
+from statsmodels.tsa.arima.model import ARIMA
+from sklearn.metrics import r2_score
 
 from models import db, User, Portfolio, Transaction, Watchlist, AccountHistory
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
@@ -37,6 +42,10 @@ SIZE_PROXY = '^RUT'
 VALUE_PROXY = 'VTV'
 
 # --- Auth & State Endpoints ---
+
+@app.route('/')
+def index():
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'index.html')
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -127,6 +136,8 @@ def load_portfolios():
     ports = Portfolio.query.filter_by(user_id=current_user.id).all()
     res = []
     for p in ports:
+        if p.portfolio_name == '_DEFAULT_SESSION_':
+            continue
         res.append({
             'id': p.id,
             'name': p.portfolio_name,
@@ -134,6 +145,58 @@ def load_portfolios():
             'config': json.loads(p.configuration)
         })
     return jsonify({'portfolios': res})
+
+
+@app.route('/api/auth/status', methods=['GET'])
+def auth_status():
+    if current_user.is_authenticated:
+        return jsonify({'logged_in': True})
+    return jsonify({'logged_in': False})
+
+@app.route('/api/portfolio/save', methods=['POST'])
+@login_required
+def api_portfolio_save():
+    data = request.json
+    tickers = data.get('tickers', [])
+    weights = data.get('weights', [])
+    total_value = data.get('total_value', 100000)
+
+    config_json = json.dumps({
+        'tickers': tickers,
+        'weights': weights,
+        'timeframe': data.get('timeframe', '1y')
+    })
+    
+    # Check for default portfolio
+    portfolio = Portfolio.query.filter_by(user_id=current_user.id, portfolio_name='_DEFAULT_SESSION_').first()
+    if portfolio:
+        portfolio.configuration = config_json
+        portfolio.total_value = float(total_value)
+    else:
+        portfolio = Portfolio(
+            user_id=current_user.id,
+            portfolio_name='_DEFAULT_SESSION_',
+            total_value=float(total_value),
+            configuration=config_json
+        )
+        db.session.add(portfolio)
+        
+    db.session.commit()
+    return jsonify({'message': 'State saved successfully'})
+
+@app.route('/api/portfolio/load', methods=['GET'])
+@login_required
+def api_portfolio_load():
+    portfolio = Portfolio.query.filter_by(user_id=current_user.id, portfolio_name='_DEFAULT_SESSION_').first()
+    if portfolio:
+        config = json.loads(portfolio.configuration)
+        return jsonify({
+            'tickers': config.get('tickers', []),
+            'weights': config.get('weights', []),
+            'total_value': portfolio.total_value,
+            'timeframe': config.get('timeframe', '1y')
+        })
+    return jsonify({'tickers': [], 'weights': [], 'total_value': 100000})
 
 
 @app.route('/portfolio/<int:portfolio_id>/state', methods=['GET'])
@@ -252,6 +315,62 @@ def execute_trade(portfolio_id):
     db.session.commit()
     
     return jsonify({'message': 'Trade executed', 'price': price})
+
+@app.route('/api/simulate_trade', methods=['POST'])
+def simulate_trade():
+    data = request.json
+    tickers = [t.upper() for t in data.get('tickers', [])]
+    weights = data.get('weights', [])
+    total_capital = float(data.get('total_capital', 100000))
+    
+    trade_ticker = data.get('trade_ticker', '').upper()
+    trade_type = data.get('trade_type', 'BUY').upper()
+    trade_qty = float(data.get('trade_qty', 0))
+    
+    if trade_qty <= 0 or not trade_ticker:
+        return jsonify({'error': 'Invalid trade parameters'}), 400
+        
+    yf_data = yf.download(trade_ticker, period='5d')
+    if yf_data.empty:
+        return jsonify({'error': 'Ticker not found'}), 404
+        
+    col = 'Adj Close' if 'Adj Close' in yf_data else 'Close'
+    df = yf_data[col]
+    series = df[trade_ticker].dropna() if isinstance(df, pd.DataFrame) else df.dropna()
+    if series.empty:
+        return jsonify({'error': 'Ticker price not available'}), 404
+        
+    price = float(series.iloc[-1])
+    trade_value = price * trade_qty
+    
+    # Calculate current dollar values
+    dollar_values = {t: w * total_capital for t, w in zip(tickers, weights)}
+    
+    # Apply trade
+    if trade_type == 'BUY':
+        dollar_values[trade_ticker] = dollar_values.get(trade_ticker, 0.0) + trade_value
+    elif trade_type == 'SELL':
+        if trade_ticker not in dollar_values:
+            return jsonify({'error': 'Cannot sell asset not in portfolio'}), 400
+        dollar_values[trade_ticker] -= trade_value
+        if dollar_values[trade_ticker] <= 1e-4:  # handle float imprecision
+            del dollar_values[trade_ticker]
+            
+    # Calculate new weights and total capital
+    new_total_capital = sum(dollar_values.values())
+    if new_total_capital <= 0:
+        return jsonify({'error': 'Portfolio value dropped to zero or below'}), 400
+        
+    new_tickers = list(dollar_values.keys())
+    new_weights = [dollar_values[t] / new_total_capital for t in new_tickers]
+    
+    return jsonify({
+        'tickers': new_tickers,
+        'weights': new_weights,
+        'total_capital': new_total_capital,
+        'price': price,
+        'trade_value': trade_value
+    })
 
 @app.route('/watchlist', methods=['GET', 'POST', 'DELETE'])
 @login_required
@@ -759,6 +878,103 @@ def analyze():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+# --- ML Endpoints ---
+
+@app.route('/api/ml/anomaly', methods=['POST'])
+def ml_anomaly():
+    data = request.json
+    ticker = data.get('ticker')
+    if not ticker: return jsonify({'error': 'Ticker required'}), 400
+    
+    try:
+        end_date = datetime.today()
+        start_date = end_date - timedelta(days=2*365)
+        df = yf.download(ticker, start=start_date, end=end_date)
+        if df.empty: return jsonify({'error': 'No data'}), 404
+        
+        if isinstance(df.columns, pd.MultiIndex):
+            df = df.xs(ticker, axis=1, level=1)
+            
+        df['Return'] = df['Close'].pct_change()
+        df.dropna(inplace=True)
+        
+        if len(df) < 50:
+            return jsonify({'error': 'Insufficient data for anomaly detection'}), 400
+        
+        features = df[['Return', 'Volume']]
+        scaler = StandardScaler()
+        scaled_features = scaler.fit_transform(features)
+        
+        model = IsolationForest(contamination=0.05, random_state=42)
+        df['Anomaly'] = model.fit_predict(scaled_features)
+        
+        anomalies = df[df['Anomaly'] == -1]
+        
+        response = {
+            'dates': [d.strftime('%Y-%m-%d') for d in anomalies.index],
+            'prices': anomalies['Close'].tolist()
+        }
+        return jsonify(response)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ml/forecast', methods=['POST'])
+def ml_forecast():
+    data = request.json
+    ticker = data.get('ticker')
+    if not ticker: return jsonify({'error': 'Ticker required'}), 400
+    
+    try:
+        end_date = datetime.today()
+        start_date = end_date - timedelta(days=2*365)
+        df = yf.download(ticker, start=start_date, end=end_date)
+        if df.empty: return jsonify({'error': 'No data'}), 404
+        
+        if isinstance(df.columns, pd.MultiIndex):
+            df = df.xs(ticker, axis=1, level=1)
+            
+        prices = df['Close'].dropna()
+        
+        if len(prices) < 100:
+            return jsonify({'error': 'Insufficient data for forecasting'}), 400
+            
+        # Train ARIMA
+        model = ARIMA(prices.values, order=(5,1,0))
+        model_fit = model.fit()
+        
+        forecast_res = model_fit.get_forecast(steps=30)
+        forecast_mean = forecast_res.predicted_mean
+        conf_int = forecast_res.conf_int(alpha=0.05) # 95% CI
+        
+        in_sample = model_fit.predict()
+        r2 = r2_score(prices.values[1:], in_sample[1:])
+        r2 = max(0, min(1, r2))
+        
+        last_date = prices.index[-1]
+        future_dates = []
+        for i in range(1, 31):
+            next_date = last_date + timedelta(days=i)
+            # Skip weekends naively for plotting purposes
+            while next_date.weekday() >= 5:
+                next_date += timedelta(days=1)
+            future_dates.append(next_date.strftime('%Y-%m-%d'))
+            last_date = next_date
+        
+        response = {
+            'historical_dates': [d.strftime('%Y-%m-%d') for d in prices.index[-100:]],
+            'historical_prices': prices.tolist()[-100:],
+            'future_dates': future_dates,
+            'predicted_prices': forecast_mean.tolist(),
+            'lower_bound': conf_int[:, 0].tolist(),
+            'upper_bound': conf_int[:, 1].tolist(),
+            'confidence_score': r2
+        }
+        return jsonify(response)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(port=5050, debug=True)
